@@ -1,0 +1,39 @@
+[package]
+name = "sdlrig"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+debug = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[build-dependencies]
+bindgen = "0.71.1"
+
+cc = "1.0"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies.sdl2]
+version = "0.37"
+default-features = false
+features = ["ttf", "gfx", "image", "unsafe_textures"]
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies.ffmpeg-next]
+git = "https://github.com/Blood-Bank-Global/rust-ffmpeg.git"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime]
+version = "32.0.0"
+[target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime-wasi]
+version = "32.0.0"
+features = ["preview1"]
+
+[dependencies]
+rand = { version = "0.9.0" }
+lazy_static = "1.4.0"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = { version = "1.0", features = ["backtrace"] }
+serde_json =  "1.0.107"
+clap = { version = "4.3.1", features = ["derive"] }
+gl = "0.14.0"
+chrono = "0.4.31"
+adjustable = { path = "./lib/adjustable" }
+libc = "0.2.172"
