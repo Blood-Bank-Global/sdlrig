@@ -9,7 +9,7 @@ use crate::{
     },
     gfxinfo::{FilterInfo, Vid, VidInfo, VidMixerInfo},
     glob::glob,
-    renderspec::{CopyEx, SendValue},
+    renderspec::{CopyEx, SendCmd, SendValue},
 };
 use anyhow::{bail, Context as AnyhowContext, Error, Result};
 use ffmpeg_next::ffi::{AVCodecContext, AVPixelFormat};
@@ -632,6 +632,7 @@ pub struct VidMixerStream {
     pub last_input_times: Vec<(VidInfo, Rational)>,
     pub last_frame: Option<Arc<WrapFrame>>,
     pub last_frame_time: Option<Rational>,
+    pub frame_count: i64,
     pub mix_ctx: Option<WrapMixCtx>,
 }
 
@@ -1213,7 +1214,36 @@ impl VidMixerData {
 
             let num_frames = raw_frames.len() as i32;
 
-            // update standard vars
+            // update how many frames we have seen
+            mix.frame_count += 1;
+
+            // update standard vars if requested by the shader
+            let std_vars = vec![
+                SendCmd::builder()
+                    .name("iFrame")
+                    .value(SendValue::Float(mix.frame_count as f32))
+                    .build(),
+                SendCmd::builder()
+                    .name("iResolution")
+                    .value(SendValue::Vector(vec![
+                        self.info.width as f32,
+                        self.info.height as f32,
+                        1.0,
+                    ]))
+                    .build(),
+                SendCmd::builder()
+                    .name("iTime")
+                    .value(SendValue::Float(mix.frame_count as f32 / fps as f32))
+                    .build(),
+                SendCmd::builder()
+                    .name("iTimeDelta")
+                    .value(SendValue::Float(f64::from(one_frame_time_secs) as f32))
+                    .build(),
+                SendCmd::builder()
+                    .name("iSampleRate")
+                    .value(SendValue::Float(fps as f32))
+                    .build(),
+            ];
 
             let ctx = mix.mix_ctx.as_ref().unwrap().0;
             let frame_name = CString::new("frame".as_bytes()).unwrap();
@@ -1221,6 +1251,29 @@ impl VidMixerData {
             for i in 0..num_vars {
                 let var = unsafe { (*ctx).vars.offset(i) };
                 let var_name = unsafe { CStr::from_ptr((*var).var.name as *mut i8) };
+                for j in 0..std_vars.len() {
+                    let cmd = &std_vars[j];
+                    let cmd_name = CString::new(cmd.name.as_bytes()).unwrap();
+                    if var_name == cmd_name.as_c_str() {
+                        match cmd.value {
+                            SendValue::Float(f) => unsafe {
+                                *((*var).data as *mut libc::c_float) = f;
+                            },
+                            SendValue::Integer(i) => unsafe {
+                                *((*var).data as *mut libc::c_int) = i;
+                            },
+                            SendValue::Vector(ref v) => {
+                                let data = unsafe { (*var).data } as *mut libc::c_float;
+                                for k in 0..v.len() {
+                                    unsafe { *(data.offset(k as isize)) = v[k] };
+                                }
+                            }
+                            SendValue::Unsigned(_) => todo!(),
+                            SendValue::IVector(_) => todo!(),
+                            SendValue::UVector(_) => todo!(),
+                        }
+                    }
+                }
                 if var_name == frame_name.as_c_str() {
                     // Found the variable, set its value
                     let data = unsafe { (*var).data } as *mut libc::c_float;
