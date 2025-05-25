@@ -499,7 +499,6 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx *ctx,
   }
 
   if (debug) {
-    pl_dispatch_abort(mix_ctx->dispatch, &sh);
     const struct pl_shader_res *res = pl_shader_finalize(sh);
     if (!res) {
       fprintf(stderr, "Failed to finalize shader\n");
