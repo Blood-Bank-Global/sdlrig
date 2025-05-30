@@ -47,8 +47,11 @@ impl CopyExBuilder {
         }
     }
 
-    pub fn name(mut self, name: String) -> Self {
-        self.obj.name = name;
+    pub fn name<T>(mut self, name: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.name = name.as_ref().into();
         self
     }
 
@@ -224,18 +227,27 @@ impl MixBuilder {
         self.obj.clone()
     }
 
-    pub fn name(mut self, name: String) -> Self {
-        self.obj.name = name;
+    pub fn name<T>(mut self, name: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.name = name.as_ref().into();
         self
     }
 
-    pub fn video(mut self, video: String) -> Self {
-        self.obj.inputs.push(MixInput::Video(video));
+    pub fn video<T>(mut self, video: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.inputs.push(MixInput::Video(video.as_ref().into()));
         self
     }
 
-    pub fn mixed(mut self, mixed: String) -> Self {
-        self.obj.inputs.push(MixInput::Mixed(mixed));
+    pub fn mixed<T>(mut self, mixed: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.inputs.push(MixInput::Mixed(mixed.as_ref().into()));
         self
     }
 
@@ -244,8 +256,11 @@ impl MixBuilder {
         self
     }
 
-    pub fn lut(mut self, lut: String) -> Self {
-        self.obj.lut = Some(lut);
+    pub fn lut<T>(mut self, lut: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.lut = Some(lut.as_ref().into());
         self
     }
 
@@ -253,15 +268,6 @@ impl MixBuilder {
         self.obj.no_display = no_display;
         self
     }
-}
-
-#[macro_export]
-macro_rules! mix {
-    ( $($k:ident : $v:expr),* ) => {{
-        let mut builder = sdlrig::renderspec::MixBuilder::new();
-        $(builder = builder.$k($v.into());)*
-        sdlrig::renderspec::RenderSpec::Mix(builder.build())
-     }};
 }
 
 impl From<Mix> for RenderSpec {

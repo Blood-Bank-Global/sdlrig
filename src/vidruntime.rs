@@ -7,7 +7,7 @@ use crate::{
         gfx_lowlevel_mix_ctx_init, pl_frame, pl_rect2df, pl_shader_var, pl_var,
         pl_var_type_PL_VAR_FLOAT, pl_var_type_PL_VAR_SINT, pl_var_type_PL_VAR_UINT,
     },
-    gfxinfo::{FilterInfo, Vid, VidInfo, VidMixerInfo},
+    gfxinfo::{Vid, VidInfo, VidMixerInfo},
     glob::glob,
     renderspec::{CopyEx, SendCmd, SendValue},
 };
@@ -15,7 +15,6 @@ use anyhow::{bail, Context as AnyhowContext, Error, Result};
 use ffmpeg_next::ffi::{AVCodecContext, AVPixelFormat};
 use ffmpeg_next::{
     decoder,
-    filter::Graph,
     format::{context::Input, input_with_decoder_format},
     frame::Video,
     media::Type,
@@ -566,50 +565,6 @@ fn get_codec_context(
         },
     };
     Ok(context_decoder)
-}
-
-pub struct FilterData {
-    pub info: FilterInfo,
-    pub graph: RefCell<Option<Graph>>,
-}
-
-impl Debug for FilterData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FilterData")
-            .field("info", &self.info)
-            .field(
-                "graph",
-                &self
-                    .graph
-                    .borrow()
-                    .as_ref()
-                    .map(|g| g.dump())
-                    .or(Some(String::from("None")))
-                    .unwrap(),
-            )
-            .finish()
-    }
-}
-
-impl FilterData {
-    pub fn load(f: &crate::gfxinfo::Filter) -> Result<FilterData> {
-        Ok(FilterData {
-            info: FilterInfo {
-                name: f.name.clone(),
-                spec: f.spec.clone(),
-                buffersrcs: f.buffersrcs.clone(),
-            },
-            graph: RefCell::new(None),
-        })
-    }
-
-    pub fn prepare(&self) -> Result<()> {
-        todo!("implement prepare for filter");
-    }
-
-    pub fn filter(&self, _frames: ()) -> Result<Video> {
-        todo!("implement filter");
-    }
 }
 
 pub struct VidMixerData {

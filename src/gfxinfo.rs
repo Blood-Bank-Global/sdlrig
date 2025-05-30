@@ -176,13 +176,19 @@ pub struct VidBuilder {
 }
 
 impl VidBuilder {
-    pub fn name(mut self, name: &str) -> Self {
-        self.name = String::from(name);
+    pub fn name<T>(mut self, name: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.name = name.as_ref().into();
         self
     }
 
-    pub fn path(mut self, path: &str) -> Self {
-        self.path = String::from(path);
+    pub fn path<T>(mut self, path: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.path = path.as_ref().into();
         self
     }
 
@@ -206,20 +212,29 @@ impl VidBuilder {
         self
     }
 
-    pub fn codec(mut self, codec: &str) -> Self {
-        self.codec = Some(String::from(codec));
+    pub fn codec<T>(mut self, codec: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.codec = Some(codec.as_ref().into());
         self
     }
 
-    pub fn format(mut self, format: &str) -> Self {
-        self.format = Some(String::from(format));
+    pub fn format<T>(mut self, format: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.format = Some(format.as_ref().into());
         self
     }
 
-    pub fn opts(mut self, opts: &[(&str, &str)]) -> Self {
+    pub fn opts<T>(mut self, opts: &[(T, T)]) -> Self
+    where
+        T: AsRef<str>,
+    {
         self.opts = Some(
             opts.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .map(|(k, v)| (k.as_ref().into(), v.as_ref().into()))
                 .collect(),
         );
         self
@@ -257,62 +272,6 @@ impl VidBuilder {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, Hash)]
-pub struct Filter {
-    pub name: String,
-    pub buffersrcs: Vec<BufferSrcArgs>,
-    pub spec: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct FilterBuilder {
-    name: Option<String>,
-    buffersrcs: Vec<BufferSrcArgs>,
-    spec: Option<String>,
-}
-
-impl FilterBuilder {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn name(mut self, name: &str) -> Self {
-        self.name.replace(String::from(name));
-        self
-    }
-
-    pub fn add_src(
-        mut self,
-        name: &str,
-        resolution: (u32, u32),
-        format: &str,
-        tbq: (i32, i32),
-    ) -> Self {
-        self.buffersrcs.push(BufferSrcArgs {
-            name: String::from(name),
-            width: resolution.0,
-            height: resolution.1,
-            format: String::from(format),
-            tbn: tbq.0,
-            tbd: tbq.1,
-        });
-        self
-    }
-
-    pub fn spec(mut self, spec: &str) -> Self {
-        self.spec.replace(String::from(spec));
-        self
-    }
-
-    pub fn build(&self) -> Filter {
-        Filter {
-            name: self.name.as_ref().unwrap().clone(),
-            buffersrcs: self.buffersrcs.clone(),
-            spec: self.spec.as_ref().unwrap().clone(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BufferSrcArgs {
     pub name: String,
@@ -321,27 +280,6 @@ pub struct BufferSrcArgs {
     pub format: String,
     pub tbn: i32,
     pub tbd: i32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FilterInfo {
-    pub name: String,
-    pub buffersrcs: Vec<BufferSrcArgs>,
-    pub spec: String,
-}
-
-#[macro_export]
-macro_rules! mktex {
-    ($name:expr =>  $( $glob:expr ),*) => {
-        sdlrig::gfxinfo::Tex {
-            name: String::from($name),
-            globs: vec![
-                $(
-                    String::from($glob),
-                )*
-            ],
-        }
-    };
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, Hash)]
@@ -381,23 +319,35 @@ impl VidMixerBuilder {
         }
     }
 
-    pub fn name(mut self, name: &str) -> Self {
-        self.name = Some(String::from(name));
+    pub fn name<T>(mut self, name: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.name = Some(name.as_ref().into());
         self
     }
 
-    pub fn prelude(mut self, prelude: &str) -> Self {
-        self.prelude = Some(String::from(prelude));
+    pub fn prelude<T>(mut self, prelude: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.prelude = Some(prelude.as_ref().into());
         self
     }
 
-    pub fn header(mut self, header: &str) -> Self {
-        self.header = Some(String::from(header));
+    pub fn header<T>(mut self, header: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.header = Some(header.as_ref().into());
         self
     }
 
-    pub fn body(mut self, body: &str) -> Self {
-        self.body = Some(String::from(body));
+    pub fn body<T>(mut self, body: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.body = Some(body.as_ref().into());
         self
     }
 
