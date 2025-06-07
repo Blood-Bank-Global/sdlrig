@@ -300,13 +300,10 @@ pub struct Reset {
     pub target: String,
 }
 
-#[macro_export]
-macro_rules! reset {
-    ($target:expr) => {
-        sdlrig::renderspec::RenderSpec::Reset(sdlrig::renderspec::Reset {
-            target: ($target).into(),
-        })
-    };
+impl From<Reset> for RenderSpec {
+    fn from(value: Reset) -> Self {
+        RenderSpec::Reset(value)
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
