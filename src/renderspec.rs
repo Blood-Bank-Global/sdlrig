@@ -16,14 +16,13 @@ pub enum RenderSpec {
     Reset(Reset),
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[repr(C)]
 pub struct CopyEx {
     pub name: String,
     pub idx: usize,
     pub src: Option<(i32, i32, u32, u32)>,
     pub dst: Option<(i32, i32, u32, u32)>,
-    pub rotation: f64,
     pub center: Option<(i32, i32)>,
     pub flip_h: bool,
     pub flip_v: bool,
@@ -70,10 +69,6 @@ impl CopyExBuilder {
         self
     }
 
-    pub fn rotation(mut self, rotation: f64) -> Self {
-        self.obj.rotation = rotation;
-        self
-    }
     pub fn center(mut self, center: (i32, i32)) -> Self {
         self.obj.center = Some(center);
         self

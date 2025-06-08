@@ -1328,7 +1328,6 @@ impl VidMixerData {
                     y1: (dst.1 + dst.3 as i32) as f32 / h,
                 };
             }
-            params.rotation = target.rotation as f32;
         };
 
         unsafe {
