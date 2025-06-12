@@ -1443,6 +1443,8 @@ impl VidMixerData {
                 }
             }
         }
-        bail!("Could not find variable {}", send_cmd.name);
+        // Remove error code to stop spamming the logs to the console
+        // bail!("Could not find variable {}", send_cmd.name);
+        Ok(())
     }
 }
