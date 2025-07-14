@@ -342,7 +342,8 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
     let mut field_enum_do_not_record = vec![];
     let mut commanders = vec![];
     let mut tweens = vec![];
-
+    let mut tween_field_idents = vec![];
+    let mut tween_tys = vec![];
     for (field_ident, field_enum, field_ty, commander, do_not_record, tween) in &field_data {
         field_idents.push(field_ident);
         field_enums.push(field_enum);
@@ -356,6 +357,8 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
         }
         if *tween {
             tweens.push(field_enum);
+            tween_field_idents.push(field_ident);
+            tween_tys.push(field_ty);
         }
     }
     let count = proc_macro2::Literal::usize_suffixed(commanders.len());
@@ -375,26 +378,12 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
         }
 
         impl #field_enum_ident {
-            pub fn tweens(&self) -> bool {
+            pub fn can_tween(&self) -> bool {
                 match self {
                     #(
                         #field_enum_ident::#tweens(_) => true,
                     )*
                     _ => false,
-                }
-            }
-            pub fn tween(&self, b: f64) -> Option<#field_enum_ident> {
-                match self {
-                    #(
-                        #field_enum_ident::#tweens(v) => {
-                            Some(
-                                #field_enum_ident::#tweens(
-                                    f64::from(*v) * b
-                                )
-                            )
-                        },
-                    )*
-                    _ => None
                 }
             }
         }
@@ -438,6 +427,22 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
                     }
                 }
                 commands
+            }
+
+            pub fn tween_diff(&self, field: #field_enum_ident, proportion: f64) -> Option<#field_enum_ident> {
+                match field {
+                    #(
+                        #field_enum_ident::#tweens(v) => {
+                            let delta = v - self.#tween_field_idents;
+                            let dp = f64::from(delta) * proportion;
+                            let new_value = #tween_tys::from(f64::from(self.#tween_field_idents) + dp);
+                            Some(
+                                #field_enum_ident::#tweens(new_value)
+                            )
+                        },
+                    )*
+                    _ => None
+                }
             }
         }
     };
