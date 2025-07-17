@@ -311,6 +311,7 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
 
     let all_ident = format_ident!("ALL_{}_UPDATERS", struct_ident.to_string().to_uppercase());
     let field_enum_ident = format_ident!("{}AllFieldsEnum", struct_ident);
+    let field_change_ident = format_ident!("{}AllFieldsChange", struct_ident);
 
     let mut knobs = vec![];
     let mut indexes = vec![];
@@ -338,16 +339,34 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
     let mut field_idents = vec![];
     let mut field_enums = vec![];
     let mut field_tys = vec![];
+    let mut to_new_value = vec![];
+    let mut from_new_value = vec![];
     let mut field_enum_with_commanders = vec![];
     let mut field_enum_do_not_record = vec![];
     let mut commanders = vec![];
     let mut tweens = vec![];
     let mut tween_field_idents = vec![];
     let mut tween_tys = vec![];
+
     for (field_ident, field_enum, field_ty, commander, do_not_record, tween) in &field_data {
         field_idents.push(field_ident);
         field_enums.push(field_enum);
         field_tys.push(field_ty);
+        let fragement_from_new_value;
+        let fragment_to_new_value;
+        if field_ty.clone().to_token_stream().to_string() == "()" {
+            fragment_to_new_value = quote! { 0.0 };
+            fragement_from_new_value = quote! { () };
+        } else if field_ty.clone().to_token_stream().to_string() == "f64" {
+            fragment_to_new_value = quote! { other.#field_ident };
+            fragement_from_new_value = quote! { self.#field_ident = diff.new_value };
+        } else {
+            fragment_to_new_value = quote! { other.#field_ident as f64 };
+            fragement_from_new_value = quote! { self.#field_ident = diff.new_value as #field_ty };
+        }
+        to_new_value.push(fragment_to_new_value.clone());
+        from_new_value.push(fragement_from_new_value.clone());
+
         if let Some(commander) = commander {
             field_enum_with_commanders.push(field_enum);
             commanders.push(commander);
@@ -372,16 +391,22 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
     });
 
     let diff_code = quote! {
-        #[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
         pub enum #field_enum_ident {
-            #(#field_enums(#field_tys)),*
+            #(#field_enums),*
+        }
+
+        #[derive(Debug, Copy, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+        pub struct #field_change_ident {
+            pub field: #field_enum_ident,
+            pub new_value: f64,
         }
 
         impl #field_enum_ident {
             pub fn can_tween(&self) -> bool {
                 match self {
                     #(
-                        #field_enum_ident::#tweens(_) => true,
+                        #field_enum_ident::#tweens => true,
                     )*
                     _ => false,
                 }
@@ -391,53 +416,69 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
         impl #impl_generics #struct_ident #ty_generics #where_clause {
             pub fn should_record(f: &#field_enum_ident) -> bool {
                 match f {
-                    #(#field_enum_ident :: #field_enum_do_not_record(_) => false,)*
+                    #(#field_enum_ident :: #field_enum_do_not_record => false,)*
                     _ => true,
                 }
             }
         }
 
         impl #impl_generics #struct_ident #ty_generics #where_clause {
-            pub fn diff(&self, other: &#struct_ident #ty_generics) -> Vec<#field_enum_ident> {
+            pub fn diff(&self, other: &#struct_ident #ty_generics) -> Vec<#field_change_ident> {
                 let mut diffs = vec![];
                 #(
                     if self.#field_idents != other.#field_idents {
-                        diffs.push(#field_enum_ident::#field_enums(other.#field_idents));
+                        diffs.push(#field_change_ident {
+                            field: #field_enum_ident::#field_enums,
+                            new_value: #to_new_value,
+                        });
                     }
                 )*
                 diffs
             }
 
-            pub fn apply_diff(&mut self, diffs: &[#field_enum_ident]) {
+            pub fn apply_diff(&mut self, diffs: &[#field_change_ident]) {
                 for diff in diffs {
-                    match diff {
+                    match diff.field {
                         #(
-                            #field_enum_ident::#field_enums(v) => self.#field_idents = *v
+                            #field_enum_ident::#field_enums => #from_new_value
                         ),*
                     }
                 }
             }
 
-            pub fn get_commands(&self, diffs: &[#field_enum_ident]) -> Vec<sdlrig::renderspec::RenderSpec> {
+            pub fn get_commands(&self, fields: &[#field_enum_ident]) -> Vec<sdlrig::renderspec::RenderSpec> {
                 let mut commands = vec![];
-                for diff in diffs {
-                    match diff {
-                        #(#field_enum_ident::#field_enum_with_commanders(_) => { commands.extend(self.#commanders()); })*
+                for field in fields {
+                    match field {
+                        #(#field_enum_ident::#field_enum_with_commanders => { commands.extend(self.#commanders()); })*
                         _ => (),
                     }
                 }
                 commands
             }
 
-            pub fn tween_diff(&self, field: #field_enum_ident, proportion: f64) -> Option<#field_enum_ident> {
+            pub fn get_field_value(&self, field: #field_enum_ident) -> Option<f64> {
+                let other = self; // groan
                 match field {
                     #(
-                        #field_enum_ident::#tweens(v) => {
-                            let delta = v - self.#tween_field_idents;
-                            let dp = f64::from(delta) * proportion;
-                            let new_value = #tween_tys::from(f64::from(self.#tween_field_idents) + dp);
+                        #field_enum_ident::#field_enums => Some(#to_new_value),
+
+                    )*
+                    _ => None,
+                }
+            }
+
+            pub fn tween_diff(&self, start: f64, end: #field_change_ident, proportion: f64) -> Option<#field_change_ident> {
+                match end.field {
+                    #(
+                        #field_enum_ident::#tweens => {
+                            let delta = (end.new_value - start) * proportion;
+                            let new_value = start + delta;
                             Some(
-                                #field_enum_ident::#tweens(new_value)
+                                #field_change_ident {
+                                    field: #field_enum_ident::#tweens,
+                                    new_value,
+                                }
                             )
                         },
                     )*
