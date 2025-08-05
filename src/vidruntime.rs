@@ -589,6 +589,7 @@ pub struct VidMixerStream {
     pub last_frame_time: Option<Rational>,
     pub frame_count: i64,
     pub mix_ctx: Option<WrapMixCtx>,
+    pub has_been_rendered: bool,
 }
 
 pub enum VidMixerInput<'a> {
@@ -1131,9 +1132,42 @@ impl VidMixerData {
                     }
                     VidMixerInput::Feedback(vid_mixer_data) => {
                         decoded_frames[i] = if vid_mixer_data.info.name == self.info.name {
+                            if !mix.has_been_rendered && mix.last_frame.is_some() {
+                                unsafe {
+                                    match gfx_lowlevel_frame_clear(
+                                        lowlevel_ctx,
+                                        &mut (*mix.last_frame.as_mut().unwrap().0).pl_frame as _,
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                        1.0,
+                                    ) {
+                                        0 => (),
+                                        err => bail!("Could not clear frame {}", err),
+                                    }
+                                    mix.has_been_rendered = true;
+                                }
+                            }
                             mix.last_frame.clone()
                         } else {
-                            let other_mix = vid_mixer_data.stream.borrow();
+                            let mut other_mix = vid_mixer_data.stream.borrow_mut();
+                            if !other_mix.has_been_rendered && other_mix.last_frame.is_some() {
+                                unsafe {
+                                    match gfx_lowlevel_frame_clear(
+                                        lowlevel_ctx,
+                                        &mut (*other_mix.last_frame.as_ref().unwrap().0).pl_frame
+                                            as _,
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                        1.0,
+                                    ) {
+                                        0 => (),
+                                        err => bail!("Could not clear frame {}", err),
+                                    }
+                                }
+                                other_mix.has_been_rendered = true;
+                            }
                             other_mix.last_frame.clone()
                         };
                     }
