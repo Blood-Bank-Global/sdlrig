@@ -1207,7 +1207,7 @@ impl VidMixerData {
             mix.frame_count += 1;
 
             // update standard vars if requested by the shader
-            let std_vars = vec![
+            let mut std_vars = vec![
                 SendCmd::builder()
                     .name("iFrame")
                     .value(SendValue::Float(mix.frame_count as f32))
@@ -1233,6 +1233,31 @@ impl VidMixerData {
                     .value(SendValue::Float(fps as f32))
                     .build(),
             ];
+
+            let mut inp_idx = 0;
+            for inp in inputs {
+                match inp {
+                    &VidMixerInput::Video(vid_data) => std_vars.push(
+                        SendCmd::builder()
+                            .name(format!("iResolution{inp_idx}"))
+                            .value(SendValue::Vector(vec![
+                                vid_data.info.size.0 as f32,
+                                vid_data.info.size.1 as f32,
+                            ]))
+                            .build(),
+                    ),
+                    &VidMixerInput::Feedback(mix_data) => std_vars.push(
+                        SendCmd::builder()
+                            .name(format!("iResolution{inp_idx}"))
+                            .value(SendValue::Vector(vec![
+                                mix_data.info.width as f32,
+                                mix_data.info.height as f32,
+                            ]))
+                            .build(),
+                    ),
+                }
+                inp_idx += 1;
+            }
 
             let ctx = mix.mix_ctx.as_ref().unwrap().0;
             let frame_name = CString::new("frame".as_bytes()).unwrap();
