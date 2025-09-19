@@ -921,9 +921,19 @@ pub struct FrameEvent {
     pub continuous_ts: (i32, i32),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MidiEvent {
+    pub channel: u8,
+    pub key: u8,
+    pub velocity: u8,
+    pub down: bool,
+    pub timestamp: i64,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GfxEvent {
     KeyEvent(KeyEvent),
+    MidiEvent(MidiEvent),
     FrameEvent(FrameEvent),
     ReloadEvent(),
 }

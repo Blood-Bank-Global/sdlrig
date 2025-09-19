@@ -8,12 +8,12 @@ debug = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
-bindgen = "0.71.1"
+bindgen = "0.72.1"
 
 cc = "1.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies.sdl2]
-version = "0.37"
+version = "0.38"
 default-features = false
 features = ["ttf", "gfx", "image", "unsafe_textures"]
 
@@ -21,9 +21,9 @@ features = ["ttf", "gfx", "image", "unsafe_textures"]
 git = "https://github.com/Blood-Bank-Global/rust-ffmpeg.git"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime]
-version = "32.0.0"
+version = "36.0.2"
 [target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime-wasi]
-version = "32.0.0"
+version = "36.0.2"
 features = ["preview1"]
 
 [dependencies]
@@ -37,3 +37,4 @@ gl = "0.14.0"
 chrono = "0.4.31"
 adjustable = { path = "./lib/adjustable" }
 libc = "0.2.172"
+midir = "0.10.2"

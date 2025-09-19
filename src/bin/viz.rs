@@ -2,18 +2,20 @@ use chrono::Local;
 use clap::Parser;
 use ffmpeg_next::log::set_level;
 use lazy_static::lazy_static;
+use midir::{Ignore, MidiInput};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
 use sdl2::rect::Rect;
 use sdlrig::appruntime::AppRuntime;
 use sdlrig::fonts;
-use sdlrig::gfxinfo::{GfxEvent, KeyEvent};
+use sdlrig::gfxinfo::{GfxEvent, KeyEvent, MidiEvent};
 use sdlrig::gfxruntime::{GfxData, GfxRuntime};
 use sdlrig::renderspec::RenderSpec;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -48,6 +50,8 @@ struct Args {
     preopen_dir: String,
     #[arg(long, default_value = "false")]
     shader_debug: bool,
+    #[arg(long)]
+    midi_port: Option<usize>,
 }
 
 // Adding a comment as a test
@@ -74,6 +78,41 @@ pub fn main() -> anyhow::Result<()> {
         ctx
     };
     window.raise();
+
+    let (midi_tx, midi_rx) = channel();
+    let mut midi_in = MidiInput::new("sdlrig-input")?;
+    midi_in.ignore(Ignore::None);
+    let _conn = match args.midi_port {
+        Some(p) => {
+            let ports = midi_in.ports();
+            eprintln!("Available midi ports:");
+            for (i, p) in ports.iter().enumerate() {
+                eprintln!("{}: {}", i, midi_in.port_name(p)?);
+            }
+            let port = ports.get(p).ok_or(anyhow::anyhow!("Invalid midi port"))?;
+            println!("Opening midi port {}", midi_in.port_name(port)?);
+            Some(midi_in.connect(
+                port,
+                "midir-read-input",
+                move |stamp, message, _| {
+                    midi_tx
+                        .send(MidiEvent {
+                            channel: message[0] & 0x0F,
+                            key: message[1],
+                            velocity: message[2],
+                            down: (message[0] & 0xF0) == 0x90 && message[2] != 0,
+                            timestamp: stamp as i64,
+                        })
+                        .unwrap();
+                },
+                (),
+            )?)
+        }
+        None => {
+            println!("Not listening for midi");
+            None
+        }
+    };
 
     let (mut canvas_w, mut canvas_h) = window.size();
 
@@ -136,6 +175,7 @@ pub fn main() -> anyhow::Result<()> {
     hud_canvas.window_mut().raise();
     window.raise();
     let mut reg_events = vec![];
+
     'running: loop {
         assert_eq!(unsafe { (*lowlevel_ctx).started }, false);
         (try_app, reloaded) = loader.try_finish(
@@ -148,6 +188,10 @@ pub fn main() -> anyhow::Result<()> {
             args.dry_run,
             lowlevel_ctx,
         );
+
+        for evt in midi_rx.try_iter() {
+            reg_events.push(GfxEvent::MidiEvent(evt));
+        }
 
         if reloaded {
             reg_events.push(GfxEvent::ReloadEvent());
