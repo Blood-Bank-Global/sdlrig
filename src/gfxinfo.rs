@@ -923,12 +923,21 @@ pub struct FrameEvent {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MidiEvent {
+    pub kind: u8,
     pub channel: u8,
     pub key: u8,
     pub velocity: u8,
     pub down: bool,
     pub timestamp: i64,
 }
+
+pub const MIDI_NOTE_OFF: u8 = 0x80;
+pub const MIDI_NOTE_ON: u8 = 0x90;
+pub const MIDI_POLY_PRESSURE: u8 = 0xA0;
+pub const MIDI_CONTROL_CHANGE: u8 = 0xB0;
+pub const MIDI_PROGRAM_CHANGE: u8 = 0xC0;
+pub const MIDI_CHANNEL_PRESSURE: u8 = 0xD0;
+pub const MIDI_PITCH_BEND: u8 = 0xE0;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GfxEvent {

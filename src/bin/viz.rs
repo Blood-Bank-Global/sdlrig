@@ -51,7 +51,7 @@ struct Args {
     #[arg(long, default_value = "false")]
     shader_debug: bool,
     #[arg(long)]
-    midi_port: Option<usize>,
+    midi_port: Vec<usize>,
 }
 
 // Adding a comment as a test
@@ -79,24 +79,32 @@ pub fn main() -> anyhow::Result<()> {
     };
     window.raise();
 
+    {
+        let midi_in = MidiInput::new("sdlrig-midi-probe")?;
+        let ports = midi_in.ports();
+        eprintln!("Available midi ports:");
+        for (i, p) in ports.iter().enumerate() {
+            eprintln!("{}: {}", i, midi_in.port_name(p)?);
+        }
+    }
+
     let (midi_tx, midi_rx) = channel();
-    let mut midi_in = MidiInput::new("sdlrig-input")?;
-    midi_in.ignore(Ignore::None);
-    let _conn = match args.midi_port {
-        Some(p) => {
+    let _conns = if !args.midi_port.is_empty() {
+        let mut conns = Vec::new();
+        for p in args.midi_port {
+            let mut midi_in = MidiInput::new(&format!("sdlrig-input-{}", p))?;
+            midi_in.ignore(Ignore::None);
             let ports = midi_in.ports();
-            eprintln!("Available midi ports:");
-            for (i, p) in ports.iter().enumerate() {
-                eprintln!("{}: {}", i, midi_in.port_name(p)?);
-            }
             let port = ports.get(p).ok_or(anyhow::anyhow!("Invalid midi port"))?;
             println!("Opening midi port {}", midi_in.port_name(port)?);
-            Some(midi_in.connect(
+            let midi_tx = midi_tx.clone();
+            conns.push(midi_in.connect(
                 port,
                 "midir-read-input",
                 move |stamp, message, _| {
                     midi_tx
                         .send(MidiEvent {
+                            kind: message[0] & 0xF0,
                             channel: message[0] & 0x0F,
                             key: message[1],
                             velocity: message[2],
@@ -106,12 +114,12 @@ pub fn main() -> anyhow::Result<()> {
                         .unwrap();
                 },
                 (),
-            )?)
+            )?);
         }
-        None => {
-            println!("Not listening for midi");
-            None
-        }
+        conns
+    } else {
+        println!("Not listening for midi");
+        vec![]
     };
 
     let (mut canvas_w, mut canvas_h) = window.size();
