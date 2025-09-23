@@ -923,11 +923,11 @@ pub struct FrameEvent {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MidiEvent {
-    pub kind: u8,
+    pub device: String,
     pub channel: u8,
+    pub kind: u8,
     pub key: u8,
     pub velocity: u8,
-    pub down: bool,
     pub timestamp: i64,
 }
 

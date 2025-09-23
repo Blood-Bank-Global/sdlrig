@@ -92,7 +92,8 @@ pub fn main() -> anyhow::Result<()> {
     let _conns = if !args.midi_port.is_empty() {
         let mut conns = Vec::new();
         for p in args.midi_port {
-            let mut midi_in = MidiInput::new(&format!("sdlrig-input-{}", p))?;
+            let name = format!("input-{}", p);
+            let mut midi_in = MidiInput::new(&name)?;
             midi_in.ignore(Ignore::None);
             let ports = midi_in.ports();
             let port = ports.get(p).ok_or(anyhow::anyhow!("Invalid midi port"))?;
@@ -104,11 +105,11 @@ pub fn main() -> anyhow::Result<()> {
                 move |stamp, message, _| {
                     midi_tx
                         .send(MidiEvent {
-                            kind: message[0] & 0xF0,
+                            device: name.clone(),
                             channel: message[0] & 0x0F,
+                            kind: message[0] & 0xF0,
                             key: message[1],
                             velocity: message[2],
-                            down: (message[0] & 0xF0) == 0x90 && message[2] != 0,
                             timestamp: stamp as i64,
                         })
                         .unwrap();
