@@ -51,7 +51,7 @@ struct Args {
     #[arg(long, default_value = "false")]
     shader_debug: bool,
     #[arg(long)]
-    midi_port: Vec<usize>,
+    midi_port: Vec<String>,
 }
 
 // Adding a comment as a test
@@ -79,43 +79,49 @@ pub fn main() -> anyhow::Result<()> {
     };
     window.raise();
 
+    let mut midi_devices = HashMap::new();
     {
         let midi_in = MidiInput::new("sdlrig-midi-probe")?;
         let ports = midi_in.ports();
         eprintln!("Available midi ports:");
         for (i, p) in ports.iter().enumerate() {
             eprintln!("{}: {}", i, midi_in.port_name(p)?);
+            midi_devices.insert(midi_in.port_name(p)?, i);
         }
     }
 
     let (midi_tx, midi_rx) = channel();
     let _conns = if !args.midi_port.is_empty() {
         let mut conns = Vec::new();
-        for p in args.midi_port {
-            let name = format!("input-{}", p);
-            let mut midi_in = MidiInput::new(&name)?;
-            midi_in.ignore(Ignore::None);
-            let ports = midi_in.ports();
-            let port = ports.get(p).ok_or(anyhow::anyhow!("Invalid midi port"))?;
-            println!("Opening midi port {}", midi_in.port_name(port)?);
-            let midi_tx = midi_tx.clone();
-            conns.push(midi_in.connect(
-                port,
-                "midir-read-input",
-                move |stamp, message, _| {
-                    midi_tx
-                        .send(MidiEvent {
-                            device: name.clone(),
-                            channel: message[0] & 0x0F,
-                            kind: message[0] & 0xF0,
-                            key: message[1],
-                            velocity: message[2],
-                            timestamp: stamp as i64,
-                        })
-                        .unwrap();
-                },
-                (),
-            )?);
+        for device in args.midi_port {
+            if let Some(p) = midi_devices.get(&device) {
+                let name = device.clone();
+                let mut midi_in = MidiInput::new(&name)?;
+                midi_in.ignore(Ignore::None);
+                let ports = midi_in.ports();
+                let port = ports.get(*p).ok_or(anyhow::anyhow!("Invalid midi port"))?;
+                println!("Opening midi port {}", midi_in.port_name(port)?);
+                let midi_tx = midi_tx.clone();
+                conns.push(midi_in.connect(
+                    port,
+                    "midir-read-input",
+                    move |stamp, message, _| {
+                        midi_tx
+                            .send(MidiEvent {
+                                device: name.clone(),
+                                channel: message[0] & 0x0F,
+                                kind: message[0] & 0xF0,
+                                key: message[1],
+                                velocity: message[2],
+                                timestamp: stamp as i64,
+                            })
+                            .unwrap();
+                    },
+                    (),
+                )?);
+            } else {
+                eprintln!("Midi device {} not found", device);
+            }
         }
         conns
     } else {
