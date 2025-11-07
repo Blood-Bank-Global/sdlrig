@@ -178,7 +178,7 @@ impl VidData {
         };
 
         assert!(
-            spec.realtime ^ spec.repeat,
+            (spec.realtime && !spec.repeat) || !spec.realtime,
             "Cannot be realtime and repeating {:#?}",
             spec
         );
