@@ -75,6 +75,24 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
                     format_ident!("adjust_{}", ident)
                 };
 
+                let scale_ident = if let Some(name) = params.remove("name") {
+                    format_ident!("scale_{}", name.to_string())
+                } else {
+                    format_ident!("scale_{}", ident)
+                };
+
+                let min_ident = if let Some(name) = params.remove("name") {
+                    format_ident!("min_{}", name.to_string())
+                } else {
+                    format_ident!("min_{}", ident)
+                };
+
+                let max_ident = if let Some(name) = params.remove("name") {
+                    format_ident!("max_{}", name.to_string())
+                } else {
+                    format_ident!("max_{}", ident)
+                };
+
                 let getter = if let Some(getter) = params.remove("getter") {
                     syn::parse2::<proc_macro2::Ident>(getter.clone()).unwrap()
                 } else {
@@ -250,11 +268,29 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
                         quote! { 1.0f64 }
                     };
 
+                    let clamp_ident = format_ident!("clamp_{}", setter);
                     q.extend(quote! {
                         impl #impl_generics #struct_ident #ty_generics #where_clause {
                             pub fn #adjustment_ident(&mut self, inc: f64) {
                                 let v = self.#getter() as f64 + inc * ((#step) as f64);
                                 self.#setter(v.clamp(#min, #max) as #ty);
+                            }
+
+                            pub fn #scale_ident(&mut self, p: f64) {
+                                let v = ((#max - #min) * p) + #min;
+                                self.#setter(v.clamp(#min, #max) as #ty);
+                            }
+
+                            pub fn #clamp_ident(&mut self, v: f64) {
+                                self.#setter(v.clamp(#min as f64, #max as f64));
+                            }
+
+                            pub fn #max_ident(&self) -> #ty {
+                                #max
+                            }
+
+                            pub fn #min_ident(&self) -> #ty{
+                                #min
                             }
                         }
                     });
