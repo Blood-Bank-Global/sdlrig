@@ -2,7 +2,7 @@ use chrono::Local;
 use clap::Parser;
 use ffmpeg_next::log::set_level;
 use lazy_static::lazy_static;
-use midir::{Ignore, MidiInput};
+use midir::{Ignore, MidiInput, MidiOutput};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
 use sdl2::rect::Rect;
@@ -52,6 +52,8 @@ struct Args {
     shader_debug: bool,
     #[arg(long)]
     midi_port: Vec<String>,
+    #[arg(long)]
+    midi_output: Vec<String>,
 }
 
 // Adding a comment as a test
@@ -128,6 +130,34 @@ pub fn main() -> anyhow::Result<()> {
         println!("Not listening for midi");
         vec![]
     };
+
+    let mut midi_output_devices = HashMap::new();
+    let mut midi_outs = HashMap::new();
+    if !args.midi_output.is_empty() {
+        let midi_out = MidiOutput::new("sdlrig-midi-output-probe")?;
+        let ports = midi_out.ports();
+        eprintln!("Available midi output ports:");
+        for (i, p) in ports.iter().enumerate() {
+            let port_name = midi_out.port_name(p)?;
+            eprintln!("{}: {}", i, port_name);
+            midi_output_devices.insert(port_name, i);
+        }
+
+        for device in args.midi_output {
+            if let Some(p) = midi_output_devices.get(&device) {
+                let midi_out = MidiOutput::new("sdlrig-midi-output")?;
+                let ports = midi_out.ports();
+                let port = ports
+                    .get(*p)
+                    .ok_or(anyhow::anyhow!("Invalid midi output port"))?;
+                println!("Opening midi output port {}", midi_out.port_name(port)?);
+                let conn = midi_out.connect(port, "midir-write-output")?;
+                midi_outs.insert(device, conn);
+            } else {
+                eprintln!("Midi output device {} not found", device);
+            }
+        }
+    }
 
     let (mut canvas_w, mut canvas_h) = window.size();
 
@@ -315,6 +345,21 @@ pub fn main() -> anyhow::Result<()> {
             for spec in specs.drain(..) {
                 if let RenderSpec::HudText(ht) = &spec {
                     write!(&mut hud_text, "{}", ht.text)?;
+                }
+
+                if let RenderSpec::SendMidi(cmd) = &spec {
+                    let mut bytes: [u8; 3] = [0; 3]; // Placeholder for actual MIDI message bytes
+                    bytes[0] = (cmd.event.kind & 0xF0) | (cmd.event.channel & 0x0F);
+                    bytes[1] = cmd.event.key;
+                    bytes[2] = cmd.event.velocity;
+                    if let Some(conn) = midi_outs.get_mut(&cmd.event.device) {
+                        conn.send(&bytes).unwrap_or_else(|e| {
+                            eprintln!(
+                                "failed to send midi message on {}: {}",
+                                &cmd.event.device, e
+                            )
+                        });
+                    }
                 }
 
                 match gfx_runtime.render(

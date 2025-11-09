@@ -269,6 +269,7 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
                     };
 
                     let clamp_ident = format_ident!("clamp_{}", setter);
+                    let pct_ident = format_ident!("{}_pct", ident);
                     q.extend(quote! {
                         impl #impl_generics #struct_ident #ty_generics #where_clause {
                             pub fn #adjustment_ident(&mut self, inc: f64) {
@@ -291,6 +292,11 @@ pub fn adjustable_macro_derive(input: proc_macro::TokenStream) -> proc_macro::To
 
                             pub fn #min_ident(&self) -> #ty{
                                 #min
+                            }
+
+                            pub fn #pct_ident(&self) -> f64 {
+                                let v = self.#getter() as f64;
+                                (v - #min) / (#max - #min)
                             }
                         }
                     });

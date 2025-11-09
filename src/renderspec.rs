@@ -4,6 +4,8 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+
+use crate::gfxinfo::MidiEvent;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[repr(C)]
 pub enum RenderSpec {
@@ -14,6 +16,7 @@ pub enum RenderSpec {
     Mix(Mix),
     SeekVid(SeekVid),
     Reset(Reset),
+    SendMidi(SendMidi),
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -89,6 +92,12 @@ impl CopyExBuilder {
     pub fn build(self) -> CopyEx {
         self.obj.clone()
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[repr(C)]
+pub struct SendMidi {
+    pub event: MidiEvent,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

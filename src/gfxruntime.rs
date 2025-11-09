@@ -188,6 +188,7 @@ impl GfxRuntime {
             ),
             RenderSpec::SeekVid(seek_vid) => self.seek_vid(seek_vid, lowlevel_ctx),
             RenderSpec::Reset(reset) => self.reset(reset),
+            RenderSpec::SendMidi(_) => Ok(()), // Midi sending is handled elsewhere
         } {
             let msg = format!("Could not render {:?}: {}", spec, e);
             if dry_run {
