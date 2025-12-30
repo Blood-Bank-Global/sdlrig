@@ -108,13 +108,14 @@ pub fn main() -> anyhow::Result<()> {
                     port,
                     "midir-read-input",
                     move |stamp, message, _| {
+                        let key = if message.len() >= 2 { message[1] } else { 0 };
                         let vel = if message.len() >= 3 { message[2] } else { 0 };
                         midi_tx
                             .send(MidiEvent {
                                 device: name.clone(),
                                 channel: message[0] & 0x0F,
                                 kind: message[0] & 0xF0,
-                                key: message[1],
+                                key: key,
                                 velocity: vel,
                                 timestamp: stamp as i64,
                             })
