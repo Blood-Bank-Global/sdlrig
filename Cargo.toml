@@ -21,10 +21,12 @@ features = ["ttf", "gfx", "image", "unsafe_textures"]
 git = "https://github.com/Blood-Bank-Global/rust-ffmpeg.git"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime]
-version = "36.0.2"
+version = "40.0.2"
+#version = "36.0.2"
 [target.'cfg(not(target_family = "wasm"))'.dependencies.wasmtime-wasi]
-version = "36.0.2"
-features = ["preview1"]
+version = "40.0.2"
+#version = "36.0.2"
+#features = ["preview1"]
 
 [dependencies]
 rand = { version = "0.9.0" }

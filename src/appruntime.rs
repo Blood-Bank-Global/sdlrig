@@ -9,7 +9,7 @@ use anyhow::{bail, Result};
 use wasmtime::{Caller, Config, Engine, Extern, Instance, Linker, Module, Store, TypedFunc};
 use wasmtime_wasi::WasiCtxBuilder;
 use wasmtime_wasi::{
-    preview1::{self, WasiP1Ctx},
+    p1::{self, WasiP1Ctx},
     DirPerms, FilePerms,
 };
 
@@ -47,7 +47,7 @@ impl AppRuntime {
         let config = Config::new();
         let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
-        preview1::add_to_linker_sync(&mut linker, |s| s)?;
+        p1::add_to_linker_sync(&mut linker, |s| s)?;
 
         let buf_ref: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(vec![]));
         let guest_buf_ref = buf_ref.clone();
