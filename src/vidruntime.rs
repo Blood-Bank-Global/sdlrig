@@ -918,7 +918,6 @@ impl VidMixerData {
                     }
                 };
 
-                addendum.push_str(&format!("{} {};\n", parts[1], parts[2]));
                 vars.push(pl_shader_var {
                     var: pl_var {
                         name: alloc_name as _,
@@ -930,6 +929,32 @@ impl VidMixerData {
                     data: ptr as _,
                     dynamic: true,
                 });
+            } else if line.starts_with("//!STR ") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() < 3 {
+                    continue;
+                }
+                let name = parts[1].to_string();
+                let mut chars = vec![];
+                for j in 2..parts.len() {
+                    if j > 2 {
+                        chars.push(format!("0x{:02x}", ' ' as u32));
+                    }
+                    for k in parts[j].chars() {
+                        chars.push(format!("0x{:02x}", k as u32));
+                    }
+                }
+
+                if chars.len() >= 128 {
+                    chars.truncate(128);
+                    addendum.push_str(&format!("// {} is too long, truncating to 128\n", name,));
+                }
+
+                addendum.push_str(&format!("int {}_length = {};\n", name, chars.len()));
+                for _ in chars.len()..128 {
+                    chars.push("0x00".to_string());
+                }
+                addendum.push_str(&format!("int {}[128] = {{{}}};\n", name, chars.join(", ")));
             }
         }
         Ok(vars)
@@ -940,28 +965,28 @@ impl VidMixerData {
         if stream.mix_ctx.is_none() {
             let mut vars = vec![];
             let mut addendum = String::new();
+
+            if let Some(header) = self.info.header.as_ref() {
+                vars.extend(Self::extract_vars(header, &mut addendum)?);
+            }
             if let Some(prelude) = self.info.prelude.as_ref() {
                 vars.extend(Self::extract_vars(prelude, &mut addendum)?);
             }
-
-            let prelude = self
-                .info
-                .prelude
-                .as_ref()
-                .map(|s| CString::new(s.as_bytes()).unwrap());
-
             if let Some(body) = self.info.body.as_ref() {
                 vars.extend(Self::extract_vars(body, &mut addendum)?);
             }
+
+            let prelude_and_addendum = self.info.prelude.as_ref().map_or(addendum.clone(), |p| {
+                String::from_iter([p.clone(), addendum.clone()].into_iter())
+            });
+
+            let prelude = CString::new(prelude_and_addendum.as_bytes()).unwrap();
+
             let body = self
                 .info
                 .body
                 .as_ref()
                 .map(|s| CString::new(s.as_bytes()).unwrap());
-
-            if let Some(header) = self.info.header.as_ref() {
-                vars.extend(Self::extract_vars(header, &mut addendum)?);
-            }
 
             let header = self
                 .info
@@ -995,7 +1020,7 @@ impl VidMixerData {
             let mix_ctx = unsafe {
                 gfx_lowlevel_mix_ctx_init(
                     lowlevel_ctx,
-                    prelude.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
+                    prelude.as_ptr(),
                     header.as_ref().map_or(std::ptr::null(), |h| h.as_ptr()),
                     body.as_ref().map_or(std::ptr::null(), |b| b.as_ptr()),
                     vars.as_mut_ptr(),
