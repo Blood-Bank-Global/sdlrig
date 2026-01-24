@@ -936,25 +936,42 @@ impl VidMixerData {
                 }
                 let name = parts[1].to_string();
                 let mut chars = vec![];
-                for j in 2..parts.len() {
-                    if j > 2 {
-                        chars.push(format!("0x{:02x}", ' ' as u32));
-                    }
-                    for k in parts[j].chars() {
-                        chars.push(format!("0x{:02x}", k as u32));
-                    }
-                }
+                let start = line.find("\"");
+                let end = line.rfind("\"");
+                if let (Some(start), Some(end)) = (start, end) {
+                    if start < end {
+                        let unescaped =
+                            unescaper::unescape(&line[start + 1..end]).unwrap_or(String::new());
 
-                if chars.len() >= 128 {
-                    chars.truncate(128);
-                    addendum.push_str(&format!("// {} is too long, truncating to 128\n", name,));
-                }
+                        for j in unescaped.chars() {
+                            chars.push(format!("0x{:02x}", j as u32));
+                        }
 
-                addendum.push_str(&format!("int {}_length = {};\n", name, chars.len()));
-                for _ in chars.len()..128 {
-                    chars.push("0x00".to_string());
+                        if chars.len() >= 128 {
+                            chars.truncate(128);
+                            addendum
+                                .push_str(
+                                    &format!("// {} is too long, truncating to 128\n", name,),
+                                );
+                        }
+
+                        addendum.push_str(&format!("int {}_length = {};\n", name, chars.len()));
+                        for _ in chars.len()..128 {
+                            chars.push("0x00".to_string());
+                        }
+                        addendum.push_str(&format!(
+                            "int {}[128] = {{{}}};\n",
+                            name,
+                            chars.join(", ")
+                        ));
+                    } else {
+                        eprintln!("Invalid string declaration (end>=start): {}", line);
+                        continue;
+                    }
+                } else {
+                    eprintln!("Invalid string declaration (no quote): {}", line);
+                    continue;
                 }
-                addendum.push_str(&format!("int {}[128] = {{{}}};\n", name, chars.join(", ")));
             }
         }
         Ok(vars)
