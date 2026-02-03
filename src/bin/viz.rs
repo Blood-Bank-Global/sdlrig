@@ -165,7 +165,7 @@ pub fn main() -> anyhow::Result<()> {
 
     // HUD WINDOW
     let mut hud_window = video_subsystem
-        .window("Heads Up", 480, 720)
+        .window("Heads Up", 640, 480)
         .opengl()
         .position(canvas_w as i32, 0)
         .build()
@@ -442,6 +442,23 @@ pub fn main() -> anyhow::Result<()> {
         hud_canvas
             .copy_ex(&tex, None, dst, 0.0, None, false, false)
             .ok();
+        if font_height > hud_canvas.output_size().unwrap().1 {
+            let src = Rect::new(
+                0,
+                hud_canvas.output_size().unwrap().1 as i32,
+                font_width,
+                font_height - hud_canvas.output_size().unwrap().1,
+            );
+            let dst = Rect::new(
+                (hud_canvas.output_size().unwrap().0 / 2) as i32,
+                0,
+                font_width,
+                src.height(),
+            );
+            hud_canvas
+                .copy_ex(&tex, src, dst, 0.0, None, false, false)
+                .ok();
+        }
         hud_canvas.present();
         unsafe {
             tex.destroy();
