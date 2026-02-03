@@ -100,7 +100,7 @@ pub struct SendMidi {
     pub event: MidiEvent,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[repr(C)]
 pub enum SendValue {
     Float(f32),
