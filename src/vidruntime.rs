@@ -28,6 +28,7 @@ use std::{
     i32,
     iter::repeat_with,
     sync::Arc,
+    usize,
 };
 extern crate ffmpeg_next as ffmpeg;
 
@@ -640,7 +641,7 @@ impl VidMixerData {
                     );
                 }
 
-                let (var_type, dim_v, dim_m, ptr) = match parts[1] {
+                let (var_type, dim_v, dim_m, dim_a, ptr) = match parts[1] {
                     "float" => {
                         if parts.len() != 4 {
                             eprintln!("Invalid number of parts for float: {}", line);
@@ -651,7 +652,7 @@ impl VidMixerData {
                             *(data.offset(0) as *mut libc::c_float) =
                                 parts[3].parse::<f32>().unwrap_or_default()
                         };
-                        (pl_var_type_PL_VAR_FLOAT, 1, 1, data)
+                        (pl_var_type_PL_VAR_FLOAT, 1, 1, 1, data)
                     }
                     "int" => {
                         if parts.len() != 4 {
@@ -663,7 +664,7 @@ impl VidMixerData {
                             *(data.offset(0) as *mut libc::c_int) =
                                 parts[3].parse::<i32>().unwrap_or_default()
                         };
-                        (pl_var_type_PL_VAR_SINT, 1, 1, data)
+                        (pl_var_type_PL_VAR_SINT, 1, 1, 1, data)
                     }
                     "uint" => {
                         if parts.len() != 4 {
@@ -675,7 +676,7 @@ impl VidMixerData {
                             *(data.offset(0) as *mut libc::c_uint) =
                                 parts[3].parse::<u32>().unwrap_or_default()
                         };
-                        (pl_var_type_PL_VAR_UINT, 1, 1, data)
+                        (pl_var_type_PL_VAR_UINT, 1, 1, 1, data)
                     }
                     "vec2" => {
                         if parts.len() != 5 {
@@ -688,7 +689,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 2, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 2, 1, 1, data as *mut libc::c_void)
                     }
                     "vec3" => {
                         if parts.len() != 6 {
@@ -701,7 +702,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 3, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 3, 1, 1, data as *mut libc::c_void)
                     }
                     "vec4" => {
                         if parts.len() != 7 {
@@ -714,7 +715,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 4, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 4, 1, 1, data as *mut libc::c_void)
                     }
                     "ivec2" => {
                         if parts.len() != 5 {
@@ -727,7 +728,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<i32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_SINT, 2, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_SINT, 2, 1, 1, data as *mut libc::c_void)
                     }
                     "ivec3" => {
                         if parts.len() != 6 {
@@ -740,7 +741,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<i32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_SINT, 3, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_SINT, 3, 1, 1, data as *mut libc::c_void)
                     }
                     "ivec4" => {
                         if parts.len() != 7 {
@@ -753,7 +754,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<i32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_SINT, 4, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_SINT, 4, 1, 1, data as *mut libc::c_void)
                     }
 
                     "uvec2" => {
@@ -767,7 +768,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<u32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_UINT, 2, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_UINT, 2, 1, 1, data as *mut libc::c_void)
                     }
                     "uvec3" => {
                         if parts.len() != 6 {
@@ -780,7 +781,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<u32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_UINT, 3, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_UINT, 3, 1, 1, data as *mut libc::c_void)
                     }
                     "uvec4" => {
                         if parts.len() != 7 {
@@ -793,7 +794,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<u32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_UINT, 4, 1, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_UINT, 4, 1, 1, data as *mut libc::c_void)
                     }
                     "mat2x2" | "mat2" => {
                         if parts.len() != 7 {
@@ -806,7 +807,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 2, 2, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 2, 2, 1, data as *mut libc::c_void)
                     }
                     "mat3x3" | "mat3" => {
                         if parts.len() != 11 {
@@ -819,7 +820,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 3, 3, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 3, 3, 1, data as *mut libc::c_void)
                     }
                     "mat4x4" | "mat4" => {
                         if parts.len() != 19 {
@@ -832,7 +833,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 4, 4, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 4, 4, 1, data as *mut libc::c_void)
                     }
                     "mat2x3" => {
                         if parts.len() != 9 {
@@ -845,7 +846,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 2, 3, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 2, 3, 1, data as *mut libc::c_void)
                     }
                     "mat2x4" => {
                         if parts.len() != 11 {
@@ -858,7 +859,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 2, 4, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 2, 4, 1, data as *mut libc::c_void)
                     }
                     "mat3x2" => {
                         if parts.len() != 9 {
@@ -871,7 +872,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 3, 2, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 3, 2, 1, data as *mut libc::c_void)
                     }
                     "mat3x4" => {
                         if parts.len() != 11 {
@@ -884,7 +885,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 3, 4, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 3, 4, 1, data as *mut libc::c_void)
                     }
                     "mat4x2" => {
                         if parts.len() != 11 {
@@ -897,7 +898,7 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 2, 4, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 2, 4, 1, data as *mut libc::c_void)
                     }
                     "mat4x3" => {
                         if parts.len() != 15 {
@@ -910,7 +911,26 @@ impl VidMixerData {
                             let value = parts[3 + j].parse::<f32>().unwrap_or_default();
                             unsafe { *(data.offset(j as isize)) = value };
                         }
-                        (pl_var_type_PL_VAR_FLOAT, 4, 3, data as *mut libc::c_void)
+                        (pl_var_type_PL_VAR_FLOAT, 4, 3, 1, data as *mut libc::c_void)
+                    }
+                    "int[]" => {
+                        if parts.len() != 4 {
+                            eprintln!("Invalid number of parts for int[]: {}", line);
+                            continue;
+                        }
+                        let len = parts[3].parse::<usize>().unwrap_or_default();
+                        let size = size_of::<libc::c_int>() * len;
+                        let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
+                        for j in 0..len {
+                            unsafe { *(data.offset(j as isize)) = 0 };
+                        }
+                        (
+                            pl_var_type_PL_VAR_SINT,
+                            1,
+                            1,
+                            len,
+                            data as *mut libc::c_void,
+                        )
                     }
                     _ => {
                         eprintln!("Unknown uniform type: {}", line);
@@ -924,7 +944,7 @@ impl VidMixerData {
                         type_: var_type,
                         dim_v: dim_v as i32,
                         dim_m: dim_m as i32,
-                        dim_a: 1,
+                        dim_a: dim_a as i32,
                     },
                     data: ptr as _,
                     dynamic: true,
@@ -1324,7 +1344,9 @@ impl VidMixerData {
                                     unsafe { *(data.offset(k as isize)) = v[k] };
                                 }
                             }
-                            SendValue::Unsigned(_) => todo!(),
+                            SendValue::Unsigned(u) => unsafe {
+                                *((*var).data as *mut libc::c_uint) = u;
+                            },
                             SendValue::IVector(_) => todo!(),
                             SendValue::UVector(_) => todo!(),
                         }
@@ -1494,7 +1516,7 @@ impl VidMixerData {
                         return Ok(());
                     },
                     SendValue::Vector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m;
+                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
                         if size != v.len() as i32 {
                             bail!(
                                 "Invalid size for vector {}: expected {}, got {}",
@@ -1511,7 +1533,7 @@ impl VidMixerData {
                         return Ok(());
                     },
                     SendValue::IVector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m;
+                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
                         if size != v.len() as i32 {
                             bail!(
                                 "Invalid size for ivector {}: expected {}, got {}",
@@ -1526,7 +1548,7 @@ impl VidMixerData {
                         return Ok(());
                     },
                     SendValue::UVector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m;
+                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
                         if size != v.len() as i32 {
                             bail!(
                                 "Invalid size for uvector {}: expected {}, got {}",
