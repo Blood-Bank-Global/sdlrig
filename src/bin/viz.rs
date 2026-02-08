@@ -8,7 +8,7 @@ use sdl2::keyboard::{Keycode, Mod};
 use sdl2::rect::Rect;
 use sdlrig::appruntime::AppRuntime;
 use sdlrig::fonts;
-use sdlrig::gfxinfo::{GfxEvent, KeyEvent, MidiEvent};
+use sdlrig::gfxinfo::{GfxEvent, KeyEvent, LogEvent, MidiEvent};
 use sdlrig::gfxruntime::{GfxData, GfxRuntime};
 use sdlrig::renderspec::RenderSpec;
 use std::collections::{HashMap, HashSet};
@@ -58,6 +58,12 @@ struct Args {
 
 // Adding a comment as a test
 pub fn main() -> anyhow::Result<()> {
+    // Tee stderr so we can consume it programmatically.
+    // err_rx will receive chunks of stderr output.
+    let (err_tx, err_rx) = channel();
+    stderr_capture::tee(err_tx);
+    let mut log_lines = String::new();
+
     set_level(ffmpeg_next::log::Level::Error);
     let args = Args::parse();
 
@@ -315,6 +321,36 @@ pub fn main() -> anyhow::Result<()> {
                 }
                 _ => (),
             }
+        }
+
+        // add loop to consume lines from stderr here
+        let mut breaker = 0; // safety breaker to prevent infinite loop in case of issues
+        while let Ok(chunk) = err_rx.try_recv() {
+            breaker += 1;
+            if breaker >= 100000 {
+                break;
+            }
+            if let Ok(s) = String::from_utf8(chunk) {
+                log_lines.push_str(&s);
+            }
+        }
+
+        let mut full_lines = Vec::new();
+        // Check if we have any newlines to process
+        if let Some(last_newline) = log_lines.rfind('\n') {
+            let (complete, partial) = log_lines.split_at(last_newline + 1);
+            for line in complete.lines() {
+                if !line.is_empty() {
+                    full_lines.push(line.to_string());
+                }
+            }
+            log_lines = partial.to_string();
+        }
+
+        for line in full_lines {
+            reg_events.push(GfxEvent::LogEvent(LogEvent {
+                message: line.to_string(),
+            }));
         }
 
         let mut hud_text = String::new();
@@ -616,5 +652,73 @@ impl RuntimeLoader {
                 return (try_app, false);
             }
         }
+    }
+}
+
+mod stderr_capture {
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use std::os::unix::io::FromRawFd;
+    use std::sync::mpsc::Sender;
+
+    pub fn tee(tx: Sender<Vec<u8>>) {
+        let mut fds: [libc::c_int; 2] = [0; 2];
+        unsafe {
+            if libc::pipe(fds.as_mut_ptr()) < 0 {
+                eprintln!("Failed to create pipe for stderr tee");
+                return;
+            }
+        }
+
+        let stderr_fd = libc::STDERR_FILENO;
+        let orig_stderr_fd = unsafe { libc::dup(stderr_fd) };
+        if orig_stderr_fd < 0 {
+            unsafe {
+                libc::close(fds[0]);
+                libc::close(fds[1]);
+            }
+            return;
+        }
+
+        // Disable buffering on stderr to avoid latency
+        unsafe {
+            // macOS specific symbol for stderr
+            #[cfg(target_os = "macos")]
+            {
+                extern "C" {
+                    static mut __stderrp: *mut libc::FILE;
+                }
+                libc::setvbuf(__stderrp, std::ptr::null_mut(), libc::_IONBF, 0);
+            }
+        }
+
+        unsafe {
+            libc::dup2(fds[1], stderr_fd);
+            libc::close(fds[1]);
+        }
+
+        std::thread::spawn(move || {
+            let mut reader = unsafe { File::from_raw_fd(fds[0]) };
+            let mut writer = unsafe { File::from_raw_fd(orig_stderr_fd) };
+            let mut buffer = [0u8; 1024];
+
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let chunk = buffer[0..n].to_vec();
+                        // Ignore errors on original stderr
+                        let _ = writer.write_all(&chunk);
+                        let _ = writer.flush();
+
+                        // Send to channel
+                        if tx.send(chunk).is_err() {
+                            break; // Receiver dropped
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
     }
 }

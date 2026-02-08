@@ -939,10 +939,16 @@ pub const MIDI_PROGRAM_CHANGE: u8 = 0xC0;
 pub const MIDI_CHANNEL_PRESSURE: u8 = 0xD0;
 pub const MIDI_PITCH_BEND: u8 = 0xE0;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LogEvent {
+    pub message: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GfxEvent {
     KeyEvent(KeyEvent),
     MidiEvent(MidiEvent),
     FrameEvent(FrameEvent),
     ReloadEvent(),
+    LogEvent(LogEvent),
 }

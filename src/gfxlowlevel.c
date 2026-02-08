@@ -61,7 +61,7 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   struct gfx_lowlevel_gpu_ctx* ctx =
       malloc(sizeof(struct gfx_lowlevel_gpu_ctx));
   if (!ctx) {
-    fprintf(stderr, "Failed to allocate memory for gfx_ctx\n");
+    fprintf(stderr, "gfx_ll> Failed to allocate memory for gfx_ctx\n");
     return NULL;
   }
   memset(ctx, 0, sizeof(struct gfx_lowlevel_gpu_ctx));
@@ -75,7 +75,7 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   };
   ctx->log = pl_log_create(PL_API_VER, &log_params);
   if (ctx->log == NULL) {
-    fprintf(stderr, "Failed to create libplacebo log\n");
+    fprintf(stderr, "gfx_ll> Failed to create libplacebo log\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
@@ -101,13 +101,13 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
 
   ctx->vk = pl_vulkan_create(ctx->log, &vk_params);
   if (ctx->vk == NULL) {
-    fprintf(stderr, "Failed to create libplacebo Vulkan context\n");
+    fprintf(stderr, "gfx_ll> Failed to create libplacebo Vulkan context\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
 
   if (!SDL_Vulkan_CreateSurface(window, ctx->vk->instance, &ctx->vk_surface)) {
-    fprintf(stderr, "Failed to create Vulkan surface\n");
+    fprintf(stderr, "gfx_ll> Failed to create Vulkan surface\n");
     return NULL;
   }
 
@@ -120,7 +120,7 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   ctx->swchain = pl_vulkan_create_swapchain(ctx->vk, &swapchain_params);
 
   if (ctx->swchain == NULL) {
-    fprintf(stderr, "Failed to create libplacebo swapchain\n");
+    fprintf(stderr, "gfx_ll> Failed to create libplacebo swapchain\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
@@ -128,7 +128,7 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   int width, height;
   SDL_GetWindowSize(ctx->shared_window, &width, &height);
   if (!pl_swapchain_resize(ctx->swchain, &width, &height)) {
-    fprintf(stderr, "Failed to resize swapchain\n");
+    fprintf(stderr, "gfx_ll> Failed to resize swapchain\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
@@ -136,7 +136,7 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   // Create a renderer
   ctx->renderer = pl_renderer_create(ctx->log, ctx->vk->gpu);
   if (ctx->renderer == NULL) {
-    fprintf(stderr, "Failed to create libplacebo renderer\n");
+    fprintf(stderr, "gfx_ll> Failed to create libplacebo renderer\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
@@ -147,12 +147,12 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
 int gfx_lowlevel_gpu_ctx_handle_resize(struct gfx_lowlevel_gpu_ctx* ctx,
                                        int width, int height) {
   if (!ctx || !ctx->swchain) {
-    fprintf(stderr, "Invalid context or swapchain\n");
+    fprintf(stderr, "gfx_ll> Invalid context or swapchain\n");
     return -1;
   }
 
   if (!pl_swapchain_resize(ctx->swchain, &width, &height)) {
-    fprintf(stderr, "Failed to resize swapchain\n");
+    fprintf(stderr, "gfx_ll> Failed to resize swapchain\n");
     return -1;
   }
 
@@ -178,7 +178,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
                                struct gfx_lowlevel_frame_ctx* dst,
                                AVFrame* src) {
   if (!ctx || !dst || !src) {
-    fprintf(stderr, "Invalid context or frame\n");
+    fprintf(stderr, "gfx_ll> Invalid context or frame\n");
     return EINVAL;
   }
 
@@ -191,7 +191,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
         src->width, src->height, src_format, src->width, src->height,
         AV_PIX_FMT_RGBA, SWS_BILINEAR, NULL, NULL, NULL);
     if (!sws_ctx) {
-      fprintf(stderr, "Failed to create sws context\n");
+      fprintf(stderr, "gfx_ll> Failed to create sws context\n");
       return ENOMEM;
     }
     dst->to_rgba = sws_ctx;
@@ -206,13 +206,13 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
   if (src->format == AV_PIX_FMT_VIDEOTOOLBOX) {
     tmp = av_frame_alloc();
     if (!tmp) {
-      fprintf(stderr, "Failed to allocate temporary AVFrame\n");
+      fprintf(stderr, "gfx_ll> Failed to allocate temporary AVFrame\n");
       return ENOMEM;
     }
     tmp->format = AV_PIX_FMT_NV12;
     ret = av_hwframe_transfer_data(tmp, src, 0);
     if (ret < 0) {
-      fprintf(stderr, "Failed to transfer data %d\n", ret);
+      fprintf(stderr, "gfx_ll> Failed to transfer data %d\n", ret);
       exit(1);
       av_frame_free(&tmp);
       return ret;
@@ -224,7 +224,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
   if (dst->to_rgba != NULL) {
     rgba_frame = av_frame_alloc();
     if (!rgba_frame) {
-      fprintf(stderr, "Failed to allocate temporary AVFrame\n");
+      fprintf(stderr, "gfx_ll> Failed to allocate temporary AVFrame\n");
       av_frame_free(&tmp);
       return ENOMEM;
     }
@@ -234,7 +234,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
     rgba_frame->format = AV_PIX_FMT_RGBA;
     ret = av_frame_get_buffer(rgba_frame, 32);
     if (ret < 0) {
-      fprintf(stderr, "Failed to allocate hw frame buffer %d\n", ret);
+      fprintf(stderr, "gfx_ll> Failed to allocate hw frame buffer %d\n", ret);
       av_frame_free(&rgba_frame);
       av_frame_free(&tmp);
       return ret;
@@ -244,7 +244,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
         sws_scale(dst->to_rgba, (const uint8_t* const*)src->data, src->linesize,
                   0, src->height, rgba_frame->data, rgba_frame->linesize);
     if (ret < 0) {
-      fprintf(stderr, "Failed to scale frame %d\n", ret);
+      fprintf(stderr, "gfx_ll> Failed to scale frame %d\n", ret);
       av_frame_free(&rgba_frame);
       av_frame_free(&tmp);
       return ret;
@@ -257,7 +257,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
   struct pl_avframe_params params = {.frame = map_src, .tex = dst->tex};
   ret = pl_map_avframe_ex(ctx->vk->gpu, &dst->pl_frame, &params);
   if (ret < 0) {
-    fprintf(stderr, "Failed to map AVFrame to libplacebo frame\n");
+    fprintf(stderr, "gfx_ll> Failed to map AVFrame to libplacebo frame\n");
     return ret;
   }
   dst->is_mapped = true;
@@ -277,13 +277,13 @@ int gfx_lowlevel_frame_create_texture(struct gfx_lowlevel_gpu_ctx* ctx,
                                       struct gfx_lowlevel_frame_ctx* frame,
                                       int width, int height) {
   if (!ctx || !frame) {
-    fprintf(stderr, "Invalid context or frame\n");
+    fprintf(stderr, "gfx_ll> Invalid context or frame\n");
     return EINVAL;
   }
 
   pl_fmt fmt = pl_find_named_fmt(ctx->vk->gpu, "rgba8");
   if (!fmt) {
-    fprintf(stderr, "Failed to find format\n");
+    fprintf(stderr, "gfx_ll> Failed to find format\n");
     return EINVAL;
   }
 
@@ -300,7 +300,7 @@ int gfx_lowlevel_frame_create_texture(struct gfx_lowlevel_gpu_ctx* ctx,
 
   frame->tex[0] = pl_tex_create(ctx->vk->gpu, &tex_params);
   if (!frame->tex[0]) {
-    fprintf(stderr, "Failed to create texture\n");
+    fprintf(stderr, "gfx_ll> Failed to create texture\n");
     return EINVAL;
   }
 
@@ -323,13 +323,14 @@ int gfx_lowlevel_frame_create_texture(struct gfx_lowlevel_gpu_ctx* ctx,
 struct gfx_lowlevel_frame_ctx* gfx_lowlevel_frame_ctx_init(
     struct gfx_lowlevel_gpu_ctx* ctx) {
   if (!ctx) {
-    fprintf(stderr, "Invalid context\n");
+    fprintf(stderr, "gfx_ll> Invalid context\n");
     return NULL;
   }
   struct gfx_lowlevel_frame_ctx* frame =
       malloc(sizeof(struct gfx_lowlevel_frame_ctx));
   if (!frame) {
-    fprintf(stderr, "Failed to allocate memory for gfx_lowlevel_frame\n");
+    fprintf(stderr,
+            "gfx_ll> Failed to allocate memory for gfx_lowlevel_frame\n");
     return NULL;
   }
   memset(frame, 0, sizeof(struct gfx_lowlevel_frame_ctx));
@@ -366,7 +367,7 @@ int gfx_lowlevel_frame_clear(struct gfx_lowlevel_gpu_ctx* ctx,
                              struct pl_frame* dst_frame, float r, float g,
                              float b, float a) {
   if (!ctx || !dst_frame) {
-    fprintf(stderr, "Invalid context or frame\n");
+    fprintf(stderr, "gfx_ll> Invalid context or frame\n");
     return EINVAL;
   }
 
@@ -381,21 +382,22 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
                                 struct pl_frame** src_frames, int num_frames,
                                 struct gfx_lowlevel_lut* lut, bool debug) {
   if (!ctx || !src_frames || !dst_frame || !params) {
-    fprintf(stderr, "Invalid context or frame\n");
+    fprintf(stderr, "gfx_ll> Invalid context or frame\n");
     return EINVAL;
   }
 
   // Render the image and run shaders
   pl_shader sh = pl_dispatch_begin(mix_ctx->dispatch);
   if (!sh) {
-    fprintf(stderr, "Failed to begin dispatch\n");
+    fprintf(stderr, "gfx_ll> Failed to begin dispatch\n");
     return EINVAL;
   }
 
   struct pl_shader_desc* descs =
       malloc(sizeof(struct pl_shader_desc) * num_frames);
   if (!descs) {
-    fprintf(stderr, "Failed to allocate memory for shader descriptors\n");
+    fprintf(stderr,
+            "gfx_ll> Failed to allocate memory for shader descriptors\n");
     return ENOMEM;
   }
   memset(descs, 0, sizeof(struct pl_shader_desc) * num_frames);
@@ -403,7 +405,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   for (int i = 0; i < num_frames; i++) {
     char* name = malloc(32);
     if (!name) {
-      fprintf(stderr, "Failed to allocate memory for shader name\n");
+      fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
       free(descs);
       return ENOMEM;
     }
@@ -426,7 +428,8 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   struct pl_shader_va* attribs =
       malloc(sizeof(struct pl_shader_va) * (num_frames + 1));
   if (!attribs) {
-    fprintf(stderr, "Failed to allocate memory for shader attributes\n");
+    fprintf(stderr,
+            "gfx_ll> Failed to allocate memory for shader attributes\n");
     free(descs);
     return ENOMEM;
   }
@@ -434,7 +437,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   for (int i = 0; i < (num_frames + 1); i++) {
     char* name = malloc(32);
     if (!name) {
-      fprintf(stderr, "Failed to allocate memory for shader name\n");
+      fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
       free(attribs);
       free(descs);
       return ENOMEM;
@@ -448,7 +451,8 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
 
     float* verts = malloc(sizeof(float) * 4 * 2);
     if (!verts) {
-      fprintf(stderr, "Failed to allocate memory for shader vertices\n");
+      fprintf(stderr,
+              "gfx_ll> Failed to allocate memory for shader vertices\n");
       free(name);
       free(attribs);
       free(descs);
@@ -495,7 +499,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   };
 
   if (!pl_shader_custom(sh, &sh_params)) {
-    fprintf(stderr, "Failed to create custom shader\n");
+    fprintf(stderr, "gfx_ll> Failed to create custom shader\n");
     return EINVAL;
   }
 
@@ -506,7 +510,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   if (debug) {
     const struct pl_shader_res* res = pl_shader_finalize(sh);
     if (!res) {
-      fprintf(stderr, "Failed to finalize shader\n");
+      fprintf(stderr, "gfx_ll> Failed to finalize shader\n");
       free(attribs);
       free(descs);
       exit(1);
@@ -546,7 +550,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
                               dst_frame->planes[0].texture->params.h,
                     },
             })) {
-      fprintf(stderr, "Failed to finish dispatch\n");
+      fprintf(stderr, "gfx_ll> Failed to finish dispatch\n");
       return EINVAL;
     }
   }
@@ -576,13 +580,14 @@ struct gfx_lowlevel_mix_ctx* gfx_lowlevel_mix_ctx_init(
     struct gfx_lowlevel_gpu_ctx* ctx, const char* prelude, const char* header,
     const char* body, struct pl_shader_var* vars, int num_vars) {
   if (!ctx) {
-    fprintf(stderr, "Invalid context\n");
+    fprintf(stderr, "gfx_ll> Invalid context\n");
     return NULL;
   }
   struct gfx_lowlevel_mix_ctx* mix_ctx =
       malloc(sizeof(struct gfx_lowlevel_mix_ctx));
   if (!mix_ctx) {
-    fprintf(stderr, "Failed to allocate memory for gfx_lowlevel_mix_ctx\n");
+    fprintf(stderr,
+            "gfx_ll> Failed to allocate memory for gfx_lowlevel_mix_ctx\n");
     return NULL;
   }
   memset(mix_ctx, 0, sizeof(struct gfx_lowlevel_mix_ctx));
@@ -604,7 +609,7 @@ struct gfx_lowlevel_mix_ctx* gfx_lowlevel_mix_ctx_init(
   struct pl_shader_var* var_copy =
       malloc(sizeof(struct pl_shader_var) * num_vars);
   if (!var_copy) {
-    fprintf(stderr, "Failed to allocate memory for shader variables\n");
+    fprintf(stderr, "gfx_ll> Failed to allocate memory for shader variables\n");
     gfx_lowlevel_mix_ctx_destroy(&mix_ctx);
     return NULL;
   }
@@ -616,7 +621,7 @@ struct gfx_lowlevel_mix_ctx* gfx_lowlevel_mix_ctx_init(
   mix_ctx->num_vars = num_vars;
   mix_ctx->dispatch = pl_dispatch_create(ctx->log, ctx->vk->gpu);
   if (!mix_ctx->dispatch) {
-    fprintf(stderr, "Failed to create dispatch\n");
+    fprintf(stderr, "gfx_ll> Failed to create dispatch\n");
     gfx_lowlevel_mix_ctx_destroy(&mix_ctx);
     return NULL;
   }
@@ -646,18 +651,18 @@ void gfx_lowlevel_mix_ctx_destroy(struct gfx_lowlevel_mix_ctx** mix_ctx) {
 struct gfx_lowlevel_lut* gfx_lowlevel_init_lut(struct gfx_lowlevel_gpu_ctx* ctx,
                                                const char* lut_filename) {
   if (!ctx || !lut_filename) {
-    fprintf(stderr, "Invalid context or LUT filename\n");
+    fprintf(stderr, "gfx_ll> Invalid context or LUT filename\n");
     return NULL;
   }
   struct gfx_lowlevel_lut* lut = malloc(sizeof(struct gfx_lowlevel_lut));
   if (!lut) {
-    fprintf(stderr, "Failed to allocate memory for LUT\n");
+    fprintf(stderr, "gfx_ll> Failed to allocate memory for LUT\n");
     return NULL;
   }
   memset(lut, 0, sizeof(struct gfx_lowlevel_lut));
   lut->lut_filename = malloc(strlen(lut_filename) + 1);
   if (!lut->lut_filename) {
-    fprintf(stderr, "Failed to allocate memory for LUT filename\n");
+    fprintf(stderr, "gfx_ll> Failed to allocate memory for LUT filename\n");
     free(lut);
     return NULL;
   }
@@ -674,7 +679,8 @@ struct gfx_lowlevel_lut* gfx_lowlevel_init_lut(struct gfx_lowlevel_gpu_ctx* ctx,
   fseek(file, 0, SEEK_SET);
   char* file_contents = malloc(file_size + 1);
   if (!file_contents) {
-    fprintf(stderr, "Failed to allocate memory for LUT file contents\n");
+    fprintf(stderr,
+            "gfx_ll> Failed to allocate memory for LUT file contents\n");
     fclose(file);
     free(lut->lut_filename);
     free(lut);
