@@ -5,16 +5,12 @@ use lazy_static::lazy_static;
 use midir::{Ignore, MidiInput, MidiOutput};
 use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::{Keycode, Mod};
-use sdl2::rect::Rect;
 use sdlrig::appruntime::AppRuntime;
-use sdlrig::fonts;
 use sdlrig::gfxinfo::{GfxEvent, KeyEvent, LogEvent, MidiEvent};
 use sdlrig::gfxruntime::{GfxData, GfxRuntime};
 use sdlrig::renderspec::RenderSpec;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -40,10 +36,6 @@ struct Args {
     fps: i64,
     #[arg(long, default_value = "false")]
     dry_run: bool,
-    #[arg(long, default_value = "assets/VT323-Regular.ttf")]
-    hud_font: String,
-    #[arg(long, default_value = "16")]
-    hud_font_size: u16,
     #[arg(long, default_value = "false")]
     show_mix_time: bool,
     #[arg(long, default_value = "/tmp/viz")]
@@ -169,33 +161,7 @@ pub fn main() -> anyhow::Result<()> {
 
     let (mut canvas_w, mut canvas_h) = window.size();
 
-    // HUD WINDOW
-    let mut hud_window = video_subsystem
-        .window("Heads Up", 640, 480)
-        .opengl()
-        .position(canvas_w as i32, 0)
-        .build()
-        .unwrap();
-
-    let mut oglindex = None;
-    for (index, item) in sdl2::render::drivers().enumerate() {
-        if item.name == "opengl" {
-            oglindex = Some(index);
-        }
-    }
-
-    hud_window.raise();
-
-    let mut hud_canvas = hud_window
-        .into_canvas()
-        .index(oglindex.unwrap() as u32)
-        .build()
-        .unwrap();
-
-    let hud_tc = Rc::new(hud_canvas.texture_creator());
-
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let mono = fonts::load_font(&args.hud_font, args.hud_font_size).unwrap();
     let start_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
     let frames_per_sec = args.fps;
@@ -224,8 +190,6 @@ pub fn main() -> anyhow::Result<()> {
     if args.dry_run {
         return Ok(());
     }
-
-    hud_canvas.window_mut().raise();
     window.raise();
     let mut reg_events = vec![];
 
@@ -353,8 +317,6 @@ pub fn main() -> anyhow::Result<()> {
             }));
         }
 
-        let mut hud_text = String::new();
-
         if let Some(app_runtime) = try_app.as_ref() {
             let mut specs = match app_runtime.calc(
                 canvas_w,
@@ -381,10 +343,6 @@ pub fn main() -> anyhow::Result<()> {
             }
 
             for spec in specs.drain(..) {
-                if let RenderSpec::HudText(ht) = &spec {
-                    write!(&mut hud_text, "{}", ht.text)?;
-                }
-
                 if let RenderSpec::SendMidi(cmd) = &spec {
                     let mut bytes: [u8; 3] = [0; 3]; // Placeholder for actual MIDI message bytes
                     bytes[0] = (cmd.event.kind & 0xF0) | (cmd.event.channel & 0x0F);
@@ -417,19 +375,19 @@ pub fn main() -> anyhow::Result<()> {
 
                 if let RenderSpec::Mix(mix) = &spec {
                     if args.show_mix_time {
-                        let inst = Duration::from_millis(
-                            (f64::from(gfx_runtime.get_present_time_for_mix(&mix.name)?) * 1000.0)
-                                as u64,
-                        );
-                        let hours = inst.as_secs() / 60 / 60;
-                        let mins = (inst.as_secs() / 60) % 60;
-                        let secs = inst.as_secs() % 60;
-                        let millis = inst.as_millis() % 1000;
-                        write!(
-                            &mut hud_text,
-                            "{}@{hours:0>2}:{mins:0>2}:{secs:0>2}.{millis:0>3}\n",
-                            mix.name
-                        )?;
+                        // let inst = Duration::from_millis(
+                        //     (f64::from(gfx_runtime.get_present_time_for_mix(&mix.name)?) * 1000.0)
+                        //         as u64,
+                        // );
+                        // let hours = inst.as_secs() / 60 / 60;
+                        // let mins = (inst.as_secs() / 60) % 60;
+                        // let secs = inst.as_secs() % 60;
+                        // let millis = inst.as_millis() % 1000;
+                        // write!(
+                        //     &mut hud_text,
+                        //     "{}@{hours:0>2}:{mins:0>2}:{secs:0>2}.{millis:0>3}\n",
+                        //     mix.name
+                        // )?;
                     }
                     for input in &mix.inputs {
                         match input {
@@ -460,44 +418,6 @@ pub fn main() -> anyhow::Result<()> {
 
         if next_time.gt(&current_time) {
             ::std::thread::sleep(next_time.checked_sub(current_time).unwrap());
-        }
-
-        write!(&mut hud_text, "\ndropped {}\n", frames_elapsed - 1,)?;
-
-        let rendered_text = mono
-            .render(&hud_text)
-            .blended_wrapped((255, 255, 255, 255), 0)
-            .unwrap();
-        let font_height = rendered_text.height();
-        let font_width = rendered_text.width();
-        let tex = rendered_text.as_texture(&hud_tc).unwrap();
-
-        let dst = Rect::new(0, 0, font_width, font_height);
-        hud_canvas.set_draw_color((0, 0, 0, 1));
-        hud_canvas.clear();
-        hud_canvas
-            .copy_ex(&tex, None, dst, 0.0, None, false, false)
-            .ok();
-        if font_height > hud_canvas.output_size().unwrap().1 {
-            let src = Rect::new(
-                0,
-                hud_canvas.output_size().unwrap().1 as i32,
-                font_width,
-                font_height - hud_canvas.output_size().unwrap().1,
-            );
-            let dst = Rect::new(
-                (hud_canvas.output_size().unwrap().0 / 2) as i32,
-                0,
-                font_width,
-                src.height(),
-            );
-            hud_canvas
-                .copy_ex(&tex, src, dst, 0.0, None, false, false)
-                .ok();
-        }
-        hud_canvas.present();
-        unsafe {
-            tex.destroy();
         }
 
         if fs::metadata(&args.wasm).unwrap().modified().unwrap() > last_loaded_wasm {

@@ -1269,13 +1269,17 @@ impl VidMixerData {
             mix.frame_count += 1;
 
             // update standard vars if requested by the shader
+
+            let target = self.info.name.clone();
             let mut std_vars = vec![
                 SendCmd::builder()
                     .name("iFrame")
+                    .mix(target.clone())
                     .value(SendValue::Float(mix.frame_count as f32))
                     .build(),
                 SendCmd::builder()
                     .name("iResolution")
+                    .mix(target.clone())
                     .value(SendValue::Vector(vec![
                         self.info.width as f32,
                         self.info.height as f32,
@@ -1284,14 +1288,17 @@ impl VidMixerData {
                     .build(),
                 SendCmd::builder()
                     .name("iTime")
+                    .mix(target.clone())
                     .value(SendValue::Float(mix.frame_count as f32 / fps as f32))
                     .build(),
                 SendCmd::builder()
                     .name("iTimeDelta")
+                    .mix(target.clone())
                     .value(SendValue::Float(f64::from(one_frame_time_secs) as f32))
                     .build(),
                 SendCmd::builder()
                     .name("iSampleRate")
+                    .mix(target.clone())
                     .value(SendValue::Float(fps as f32))
                     .build(),
             ];
@@ -1306,6 +1313,7 @@ impl VidMixerData {
                                 vid_data.info.size.0 as f32,
                                 vid_data.info.size.1 as f32,
                             ]))
+                            .mix(target.clone())
                             .build(),
                     ),
                     &VidMixerInput::Feedback(mix_data) => std_vars.push(
@@ -1315,50 +1323,24 @@ impl VidMixerData {
                                 mix_data.info.width as f32,
                                 mix_data.info.height as f32,
                             ]))
+                            .mix(target.clone())
                             .build(),
                     ),
                 }
                 inp_idx += 1;
             }
 
+            std_vars.push(
+                SendCmd::builder()
+                    .name("frame")
+                    .value(SendValue::Float((frames % (1 << 24)) as f32))
+                    .mix(target.clone())
+                    .build(),
+            );
+
             let ctx = mix.mix_ctx.as_ref().unwrap().0;
-            let frame_name = CString::new("frame".as_bytes()).unwrap();
-            let num_vars = unsafe { (*ctx).num_vars } as isize;
-            for i in 0..num_vars {
-                let var = unsafe { (*ctx).vars.offset(i) };
-                let var_name = unsafe { CStr::from_ptr((*var).var.name as *mut i8) };
-                for j in 0..std_vars.len() {
-                    let cmd = &std_vars[j];
-                    let cmd_name = CString::new(cmd.name.as_bytes()).unwrap();
-                    if var_name == cmd_name.as_c_str() {
-                        match cmd.value {
-                            SendValue::Float(f) => unsafe {
-                                *((*var).data as *mut libc::c_float) = f;
-                            },
-                            SendValue::Integer(i) => unsafe {
-                                *((*var).data as *mut libc::c_int) = i;
-                            },
-                            SendValue::Vector(ref v) => {
-                                let data = unsafe { (*var).data } as *mut libc::c_float;
-                                for k in 0..v.len() {
-                                    unsafe { *(data.offset(k as isize)) = v[k] };
-                                }
-                            }
-                            SendValue::Unsigned(u) => unsafe {
-                                *((*var).data as *mut libc::c_uint) = u;
-                            },
-                            SendValue::IVector(_) => todo!(),
-                            SendValue::UVector(_) => todo!(),
-                        }
-                    }
-                }
-                if var_name == frame_name.as_c_str() {
-                    // Found the variable, set its value
-                    let data = unsafe { (*var).data } as *mut libc::c_float;
-                    unsafe {
-                        *data = (frames % (1 << 24)) as f32;
-                    };
-                }
+            for c in std_vars {
+                self.update_values(ctx, &c)?;
             }
 
             let params = gfx_lowlevel_filter_params {
@@ -1496,6 +1478,15 @@ impl VidMixerData {
         self.prepare(lowlevel_ctx)?;
         let stream = self.stream.borrow_mut();
         let ctx = stream.mix_ctx.as_ref().unwrap().0;
+        self.update_values(ctx, send_cmd)?;
+        Ok(())
+    }
+
+    pub fn update_values(
+        &self,
+        ctx: *mut gfx_lowlevel_mix_ctx,
+        send_cmd: &crate::renderspec::SendCmd,
+    ) -> Result<()> {
         let name = CString::new(send_cmd.name.as_bytes()).unwrap();
         let num_vars = unsafe { (*ctx).num_vars } as isize;
         for i in 0..num_vars {
