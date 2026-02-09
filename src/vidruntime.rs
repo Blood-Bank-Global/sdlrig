@@ -627,7 +627,7 @@ impl VidMixerData {
         for line in txt.lines() {
             if line.starts_with("//!VAR ") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() < 4 {
+                if (!parts[1].ends_with("[]") && parts.len() < 4) || parts.len() < 3 {
                     continue;
                 }
                 let name = parts[2].to_string();
@@ -914,14 +914,19 @@ impl VidMixerData {
                         (pl_var_type_PL_VAR_FLOAT, 4, 3, 1, data as *mut libc::c_void)
                     }
                     "int[]" => {
-                        if parts.len() != 4 {
+                        if parts.len() < 3 {
                             eprintln!("Invalid number of parts for int[]: {}", line);
                             continue;
                         }
-                        let len = parts[3].parse::<usize>().unwrap_or_default();
+
+                        let len = (parts.len() - 3).clamp(2, usize::MAX);
                         let size = size_of::<libc::c_int>() * len;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
-                        for j in 0..len {
+                        for j in 0..(parts.len() - 3) {
+                            let value = parts[3 + j].parse::<i32>().unwrap_or_default();
+                            unsafe { *(data.offset(j as isize)) = value };
+                        }
+                        for j in (parts.len() - 3).max(0)..len {
                             unsafe { *(data.offset(j as isize)) = 0 };
                         }
                         (
@@ -1524,34 +1529,28 @@ impl VidMixerData {
                         return Ok(());
                     },
                     SendValue::IVector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
-                        if size != v.len() as i32 {
-                            bail!(
-                                "Invalid size for ivector {}: expected {}, got {}",
-                                send_cmd.name,
-                                size,
-                                v.len()
-                            );
-                        }
-                        for j in 0..size {
+                        libc::free((*var).data as *mut libc::c_void);
+                        let len = v.len().clamp(2, usize::MAX);
+                        (*var).data =
+                            libc::malloc(len * size_of::<libc::c_int>()) as *mut libc::c_void;
+                        for j in 0..v.len() {
                             *(((*var).data as *mut libc::c_int).offset(j as isize)) = v[j as usize];
                         }
+                        for _ in v.len()..len {
+                            *(((*var).data as *mut libc::c_int).offset(v.len() as isize)) = 0;
+                        }
+                        (*var).var.dim_a = v.len() as i32;
                         return Ok(());
                     },
                     SendValue::UVector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
-                        if size != v.len() as i32 {
-                            bail!(
-                                "Invalid size for uvector {}: expected {}, got {}",
-                                send_cmd.name,
-                                size,
-                                v.len()
-                            );
-                        }
-                        for j in 0..size {
+                        libc::free((*var).data as *mut libc::c_void);
+                        (*var).data =
+                            libc::malloc(v.len() * size_of::<libc::c_uint>()) as *mut libc::c_void;
+                        for j in 0..v.len() {
                             *(((*var).data as *mut libc::c_uint).offset(j as isize)) =
                                 v[j as usize];
                         }
+                        (*var).var.dim_a = v.len() as i32;
                         return Ok(());
                     },
                 }
