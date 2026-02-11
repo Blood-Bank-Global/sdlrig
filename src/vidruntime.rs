@@ -937,6 +937,37 @@ impl VidMixerData {
                             data as *mut libc::c_void,
                         )
                     }
+                    "vec2[]" => {
+                        if parts.len() < 3 {
+                            eprintln!("Invalid number of parts for vec2[]: {}", line);
+                            continue;
+                        }
+                        if parts.len() != 3 && (parts.len() - 3) % 2 != 0 {
+                            eprintln!(
+                                "Must have an even number of extra values for vec2[]: {}",
+                                line
+                            );
+                            continue;
+                        }
+
+                        let len = (parts.len() - 3).clamp(4, usize::MAX);
+                        let size = size_of::<libc::c_float>() * len;
+                        let data = unsafe { libc::malloc(size) } as *mut libc::c_float;
+                        for j in 0..(parts.len() - 3) {
+                            let value = parts[3 + j].parse::<f32>().unwrap_or_default();
+                            unsafe { *(data.offset(j as isize)) = value };
+                        }
+                        for j in (parts.len() - 3).max(0)..len {
+                            unsafe { *(data.offset(j as isize)) = 0.0 };
+                        }
+                        (
+                            pl_var_type_PL_VAR_FLOAT,
+                            2,
+                            1,
+                            len / 2,
+                            data as *mut libc::c_void,
+                        )
+                    }
                     _ => {
                         eprintln!("Unknown uniform type: {}", line);
                         continue;
@@ -1512,25 +1543,53 @@ impl VidMixerData {
                         return Ok(());
                     },
                     SendValue::Vector(ref v) => unsafe {
-                        let size = (*var).var.dim_v * (*var).var.dim_m * (*var).var.dim_a;
-                        if size != v.len() as i32 {
+                        let elem_size = ((*var).var.dim_v * (*var).var.dim_m) as usize;
+                        let curr_count = (*var).var.dim_a as usize;
+
+                        let len = if curr_count == 1 && elem_size > 1 {
+                            v.len().clamp(elem_size, usize::MAX)
+                        } else {
+                            v.len().clamp(elem_size * 2, usize::MAX)
+                        };
+
+                        if len % elem_size != 0 {
                             bail!(
-                                "Invalid size for vector {}: expected {}, got {}",
+                                "Invalid size for vector {}: expected multiple of {}",
                                 send_cmd.name,
-                                size,
-                                v.len()
+                                elem_size
                             );
                         }
-                        for j in 0..size {
+                        libc::free((*var).data as *mut libc::c_void);
+                        (*var).data =
+                            libc::malloc(len * size_of::<libc::c_float>()) as *mut libc::c_void;
+                        for j in 0..v.len() {
                             *(((*var).data as *mut libc::c_float).offset(j as isize)) =
                                 v[j as usize];
                         }
-
+                        for _ in v.len()..len {
+                            *(((*var).data as *mut libc::c_float).offset(v.len() as isize)) = 0.0;
+                        }
+                        (*var).var.dim_a = (len / elem_size) as i32;
                         return Ok(());
                     },
                     SendValue::IVector(ref v) => unsafe {
+                        let elem_size = ((*var).var.dim_v * (*var).var.dim_m) as usize;
+                        let curr_count = (*var).var.dim_a as usize;
+
+                        let len = if curr_count == 1 && elem_size > 1 {
+                            v.len().clamp(elem_size, usize::MAX)
+                        } else {
+                            v.len().clamp(elem_size * 2, usize::MAX)
+                        };
+
+                        if len % elem_size != 0 {
+                            bail!(
+                                "Invalid size for vector {}: expected multiple of {}",
+                                send_cmd.name,
+                                elem_size
+                            );
+                        }
                         libc::free((*var).data as *mut libc::c_void);
-                        let len = v.len().clamp(2, usize::MAX);
                         (*var).data =
                             libc::malloc(len * size_of::<libc::c_int>()) as *mut libc::c_void;
                         for j in 0..v.len() {
@@ -1539,25 +1598,40 @@ impl VidMixerData {
                         for _ in v.len()..len {
                             *(((*var).data as *mut libc::c_int).offset(v.len() as isize)) = 0;
                         }
-                        (*var).var.dim_a = v.len() as i32;
+                        (*var).var.dim_a = (len / elem_size) as i32;
                         return Ok(());
                     },
                     SendValue::UVector(ref v) => unsafe {
+                        let elem_size = ((*var).var.dim_v * (*var).var.dim_m) as usize;
+                        let curr_count = (*var).var.dim_a as usize;
+                        let len = if curr_count == 1 && elem_size > 1 {
+                            v.len().clamp(elem_size * 2, usize::MAX)
+                        } else {
+                            v.len().clamp(elem_size, usize::MAX)
+                        };
+                        if len % elem_size != 0 {
+                            bail!(
+                                "Invalid size for vector {}: expected multiple of {}",
+                                send_cmd.name,
+                                elem_size
+                            );
+                        }
                         libc::free((*var).data as *mut libc::c_void);
                         (*var).data =
-                            libc::malloc(v.len() * size_of::<libc::c_uint>()) as *mut libc::c_void;
+                            libc::malloc(len * size_of::<libc::c_uint>()) as *mut libc::c_void;
                         for j in 0..v.len() {
                             *(((*var).data as *mut libc::c_uint).offset(j as isize)) =
                                 v[j as usize];
                         }
-                        (*var).var.dim_a = v.len() as i32;
+                        for _ in v.len()..len {
+                            *(((*var).data as *mut libc::c_uint).offset(v.len() as isize)) = 0;
+                        }
+                        (*var).var.dim_a = (len / elem_size) as i32;
                         return Ok(());
                     },
                 }
             }
         }
-        // Remove error code to stop spamming the logs to the console
-        // bail!("Could not find variable {}", send_cmd.name);
         Ok(())
     }
 }
