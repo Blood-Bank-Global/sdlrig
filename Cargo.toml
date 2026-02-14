@@ -41,3 +41,4 @@ adjustable = { path = "./lib/adjustable" }
 libc = "0.2.172"
 midir = "0.10.2"
 unescaper = "0.1.8"
+regex = "1.12.3"

@@ -30,6 +30,8 @@ use std::{
     sync::Arc,
     usize,
 };
+
+use regex;
 extern crate ffmpeg_next as ffmpeg;
 
 #[derive(Debug)]
@@ -624,8 +626,25 @@ impl VidMixerData {
 
     fn extract_vars(txt: &str, addendum: &mut String) -> Result<Vec<pl_shader_var>> {
         let mut vars = vec![];
+        let mut lines = vec![];
+        let mut longline = None;
         for line in txt.lines() {
-            if line.starts_with("//!VAR ") {
+            if line.starts_with("//!LONGVAR ") {
+                longline.replace(line.to_string());
+            } else if let Some(curr) = longline.as_mut() {
+                if line.starts_with("//!ENDLONGVAR") {
+                    lines.push(longline.take().unwrap_or_default());
+                } else {
+                    let stripped = line.strip_prefix("//! ").unwrap_or_default();
+                    curr.push_str("\n");
+                    curr.push_str(stripped);
+                }
+            } else {
+                lines.push(line.to_string());
+            }
+        }
+        for line in lines {
+            if line.starts_with("//!VAR ") || line.starts_with("//!LONGVAR ") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if (!parts[1].ends_with("[]") && parts.len() < 4) || parts.len() < 3 {
                     continue;
@@ -662,7 +681,11 @@ impl VidMixerData {
                         let data = unsafe { libc::malloc(size_of::<libc::c_int>()) };
                         unsafe {
                             *(data.offset(0) as *mut libc::c_int) =
-                                parts[3].parse::<i32>().unwrap_or_default()
+                                if let Some(stripped) = parts[3].strip_prefix("0x") {
+                                    i32::from_str_radix(stripped, 16).unwrap_or_default()
+                                } else {
+                                    parts[3].parse::<i32>().unwrap_or_default()
+                                }
                         };
                         (pl_var_type_PL_VAR_SINT, 1, 1, 1, data)
                     }
@@ -674,7 +697,11 @@ impl VidMixerData {
                         let data = unsafe { libc::malloc(size_of::<libc::c_uint>()) };
                         unsafe {
                             *(data.offset(0) as *mut libc::c_uint) =
-                                parts[3].parse::<u32>().unwrap_or_default()
+                                if let Some(stripped) = parts[3].strip_prefix("0x") {
+                                    u32::from_str_radix(stripped, 16).unwrap_or_default()
+                                } else {
+                                    parts[3].parse::<u32>().unwrap_or_default()
+                                }
                         };
                         (pl_var_type_PL_VAR_UINT, 1, 1, 1, data)
                     }
@@ -725,7 +752,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_int>() * 2;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
                         for j in 0..2 {
-                            let value = parts[3 + j].parse::<i32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                i32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<i32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_SINT, 2, 1, 1, data as *mut libc::c_void)
@@ -738,7 +769,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_int>() * 3;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
                         for j in 0..3 {
-                            let value = parts[3 + j].parse::<i32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                i32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<i32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_SINT, 3, 1, 1, data as *mut libc::c_void)
@@ -751,7 +786,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_int>() * 4;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
                         for j in 0..4 {
-                            let value = parts[3 + j].parse::<i32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                i32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<i32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_SINT, 4, 1, 1, data as *mut libc::c_void)
@@ -765,7 +804,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_uint>() * 2;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_uint;
                         for j in 0..2 {
-                            let value = parts[3 + j].parse::<u32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                u32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<u32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_UINT, 2, 1, 1, data as *mut libc::c_void)
@@ -778,7 +821,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_uint>() * 3;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_uint;
                         for j in 0..3 {
-                            let value = parts[3 + j].parse::<u32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                u32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<u32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_UINT, 3, 1, 1, data as *mut libc::c_void)
@@ -791,7 +838,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_uint>() * 4;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_uint;
                         for j in 0..4 {
-                            let value = parts[3 + j].parse::<u32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                u32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<u32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         (pl_var_type_PL_VAR_UINT, 4, 1, 1, data as *mut libc::c_void)
@@ -923,7 +974,11 @@ impl VidMixerData {
                         let size = size_of::<libc::c_int>() * len;
                         let data = unsafe { libc::malloc(size) } as *mut libc::c_int;
                         for j in 0..(parts.len() - 3) {
-                            let value = parts[3 + j].parse::<i32>().unwrap_or_default();
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                i32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<i32>().unwrap_or_default()
+                            };
                             unsafe { *(data.offset(j as isize)) = value };
                         }
                         for j in (parts.len() - 3).max(0)..len {
@@ -931,6 +986,34 @@ impl VidMixerData {
                         }
                         (
                             pl_var_type_PL_VAR_SINT,
+                            1,
+                            1,
+                            len,
+                            data as *mut libc::c_void,
+                        )
+                    }
+                    "uint[]" => {
+                        if parts.len() < 3 {
+                            eprintln!("Invalid number of parts for uint[]: {}", line);
+                            continue;
+                        }
+
+                        let len = (parts.len() - 3).clamp(2, usize::MAX);
+                        let size = size_of::<libc::c_uint>() * len;
+                        let data = unsafe { libc::malloc(size) } as *mut libc::c_uint;
+                        for j in 0..(parts.len() - 3) {
+                            let value = if let Some(stripped) = parts[3 + j].strip_prefix("0x") {
+                                u32::from_str_radix(stripped, 16).unwrap_or_default()
+                            } else {
+                                parts[3 + j].parse::<u32>().unwrap_or_default()
+                            };
+                            unsafe { *(data.offset(j as isize)) = value };
+                        }
+                        for j in (parts.len() - 3).max(0)..len {
+                            unsafe { *(data.offset(j as isize)) = 0 };
+                        }
+                        (
+                            pl_var_type_PL_VAR_UINT,
                             1,
                             1,
                             len,
@@ -1053,19 +1136,24 @@ impl VidMixerData {
                 String::from_iter([p.clone(), addendum.clone()].into_iter())
             });
 
-            let prelude = CString::new(prelude_and_addendum.as_bytes()).unwrap();
+            let re = regex::Regex::new(r"(?m)^//!.*\n").unwrap();
 
-            let body = self
-                .info
-                .body
-                .as_ref()
-                .map(|s| CString::new(s.as_bytes()).unwrap());
+            let prelude = Some(
+                CString::new(re.replace_all(&prelude_and_addendum, "").as_bytes())
+                    .unwrap_or_default(),
+            );
 
-            let header = self
-                .info
-                .header
-                .as_ref()
-                .map(|s| CString::new(s.as_bytes()).unwrap());
+            let body = if let Some(body) = self.info.body.as_ref() {
+                Some(CString::new(re.replace_all(body, "").as_bytes()).unwrap_or_default())
+            } else {
+                None
+            };
+
+            let header = if let Some(header) = self.info.header.as_ref() {
+                Some(CString::new(re.replace_all(header, "").as_bytes()).unwrap_or_default())
+            } else {
+                None
+            };
 
             //add some internally used variables
             let data = unsafe { libc::malloc(size_of::<libc::c_float>()) };
@@ -1093,7 +1181,7 @@ impl VidMixerData {
             let mix_ctx = unsafe {
                 gfx_lowlevel_mix_ctx_init(
                     lowlevel_ctx,
-                    prelude.as_ptr(),
+                    prelude.as_ref().map_or(std::ptr::null(), |h| h.as_ptr()),
                     header.as_ref().map_or(std::ptr::null(), |h| h.as_ptr()),
                     body.as_ref().map_or(std::ptr::null(), |b| b.as_ptr()),
                     vars.as_mut_ptr(),
