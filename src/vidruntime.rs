@@ -624,7 +624,7 @@ impl VidMixerData {
         self.info.clone()
     }
 
-    fn extract_vars(txt: &str, addendum: &mut String) -> Result<Vec<pl_shader_var>> {
+    fn extract_vars(txt: &str, _addendum: &mut String) -> Result<Vec<pl_shader_var>> {
         let mut vars = vec![];
         let mut lines = vec![];
         let mut longline = None;
@@ -1074,7 +1074,15 @@ impl VidMixerData {
                     continue;
                 }
                 let name = parts[1].to_string();
-                let mut chars = vec![];
+                let c_name = CString::new(name.as_bytes()).unwrap();
+                let alloc_name = unsafe { libc::malloc(c_name.as_bytes().len() + 1) };
+                unsafe {
+                    libc::memcpy(
+                        alloc_name,
+                        c_name.as_ptr() as _,
+                        c_name.as_bytes().len() + 1,
+                    );
+                }
                 let start = line.find("\"");
                 let end = line.rfind("\"");
                 if let (Some(start), Some(end)) = (start, end) {
@@ -1082,27 +1090,51 @@ impl VidMixerData {
                         let unescaped =
                             unescaper::unescape(&line[start + 1..end]).unwrap_or(String::new());
 
-                        for j in unescaped.chars() {
-                            chars.push(format!("0x{:02x}", j as u32));
+                        let len = unescaped.bytes().len().max(2);
+                        let size = size_of::<libc::c_uint>() * len;
+                        let data = unsafe { libc::malloc(size) } as *mut libc::c_uint;
+                        for (j, c) in unescaped.bytes().enumerate() {
+                            unsafe { *(data.offset(j as isize)) = c as u32 };
                         }
 
-                        if chars.len() >= 128 {
-                            chars.truncate(128);
-                            addendum
-                                .push_str(
-                                    &format!("// {} is too long, truncating to 128\n", name,),
-                                );
-                        }
+                        vars.push(pl_shader_var {
+                            var: pl_var {
+                                name: alloc_name as _,
+                                type_: pl_var_type_PL_VAR_UINT,
+                                dim_v: 1,
+                                dim_m: 1,
+                                dim_a: len as i32,
+                            },
+                            data: data as _,
+                            dynamic: true,
+                        });
 
-                        addendum.push_str(&format!("int {}_length = {};\n", name, chars.len()));
-                        for _ in chars.len()..128 {
-                            chars.push("0x00".to_string());
+                        let name = format!("{name}_length");
+                        let c_name = CString::new(name.as_bytes()).unwrap();
+                        let alloc_name = unsafe { libc::malloc(c_name.as_bytes().len() + 1) };
+                        unsafe {
+                            libc::memcpy(
+                                alloc_name,
+                                c_name.as_ptr() as _,
+                                c_name.as_bytes().len() + 1,
+                            );
                         }
-                        addendum.push_str(&format!(
-                            "int {}[128] = {{{}}};\n",
-                            name,
-                            chars.join(", ")
-                        ));
+                        let data =
+                            unsafe { libc::malloc(size_of::<libc::c_uint>()) } as *mut libc::c_uint;
+                        unsafe {
+                            *(data.offset(0) as *mut libc::c_uint) = unescaped.bytes().len() as u32
+                        };
+                        vars.push(pl_shader_var {
+                            var: pl_var {
+                                name: alloc_name as _,
+                                type_: pl_var_type_PL_VAR_UINT,
+                                dim_v: 1,
+                                dim_m: 1,
+                                dim_a: 1,
+                            },
+                            data: data as _,
+                            dynamic: true,
+                        });
                     } else {
                         eprintln!("Invalid string declaration (end>=start): {}", line);
                         continue;
