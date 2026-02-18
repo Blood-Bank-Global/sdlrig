@@ -260,6 +260,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
     fprintf(stderr, "gfx_ll> Failed to map AVFrame to libplacebo frame\n");
     return ret;
   }
+  pl_gpu_finish(ctx->vk->gpu);
   dst->is_mapped = true;
 
   if (tmp) {
@@ -553,9 +554,11 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       fprintf(stderr, "gfx_ll> Failed to finish dispatch\n");
       return EINVAL;
     }
+    pl_gpu_finish(ctx->vk->gpu);
   }
   for (int i = 0; i < num_verts; i++) {
     free((void*)attribs[i].attr.name);
+    free((void*)attribs[i].data[0]);  // free the verts allocation
   }
   free(attribs);
   for (int i = 0; i < num_descs; i++) {
@@ -570,8 +573,8 @@ int gfx_lowlevel_gpu_ctx_finish_frame(struct gfx_lowlevel_gpu_ctx* ctx) {
   assert(ctx != NULL);
   assert(ctx->swchain != NULL);
   assert(ctx->started);
-  pl_swapchain_swap_buffers(ctx->swchain);
   pl_swapchain_submit_frame(ctx->swchain);
+  pl_swapchain_swap_buffers(ctx->swchain);
   ctx->started = false;
   return 0;
 }
@@ -715,5 +718,14 @@ int gfx_lowlevel_destroy_lut(struct gfx_lowlevel_lut** lut) {
     free((void*)(*lut));
     *lut = NULL;
   }
+  return 0;
+}
+
+int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_mix_ctx* mix_ctx) {
+  if (!mix_ctx || !mix_ctx->dispatch) {
+    fprintf(stderr, "gfx_ll> Invalid mix context\n");
+    return EINVAL;
+  }
+  pl_dispatch_reset_frame(mix_ctx->dispatch);
   return 0;
 }

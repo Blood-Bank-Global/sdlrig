@@ -101,5 +101,5 @@ int gfx_lowlevel_frame_create_texture(struct gfx_lowlevel_gpu_ctx* ctx,
 struct gfx_lowlevel_lut* gfx_lowlevel_init_lut(struct gfx_lowlevel_gpu_ctx* ctx,
                                                const char* lut_filename);
 int gfx_lowlevel_destroy_lut(struct gfx_lowlevel_lut** lut);
-
+int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_mix_ctx* mix_ctx);
 #endif  // GFXLOWLEVEL_H

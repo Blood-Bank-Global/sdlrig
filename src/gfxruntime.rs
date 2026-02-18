@@ -324,6 +324,16 @@ impl GfxRuntime {
         }
     }
 
+    pub fn reset_mix_dispatches(&self) -> Result<()> {
+        let gfx_data = self.gfx_data.borrow();
+        for data in gfx_data.values() {
+            if let GfxData::VidMixerData(vid_mixer_data) = data {
+                vid_mixer_data.reset_mix_dispatch()?;
+            }
+        }
+        Ok(())
+    }
+
     fn reset(&self, reset: &Reset) -> Result<()> {
         let mut gfx_data = self.gfx_data.borrow_mut();
         match gfx_data.get_mut(&reset.target) {

@@ -340,6 +340,8 @@ pub fn main() -> anyhow::Result<()> {
                     eprintln!("Failed to start frame looping");
                     continue 'running;
                 }
+
+                gfx_runtime.reset_mix_dispatches()?;
             }
 
             for spec in specs.drain(..) {

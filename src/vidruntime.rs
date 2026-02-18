@@ -4,8 +4,9 @@ use crate::{
         gfx_lowlevel_frame_ctx, gfx_lowlevel_frame_ctx_destroy, gfx_lowlevel_frame_ctx_init,
         gfx_lowlevel_gpu_ctx, gfx_lowlevel_gpu_ctx_render, gfx_lowlevel_lut,
         gfx_lowlevel_map_frame_ctx, gfx_lowlevel_mix_ctx, gfx_lowlevel_mix_ctx_destroy,
-        gfx_lowlevel_mix_ctx_init, pl_frame, pl_rect2df, pl_shader_var, pl_var,
-        pl_var_type_PL_VAR_FLOAT, pl_var_type_PL_VAR_SINT, pl_var_type_PL_VAR_UINT,
+        gfx_lowlevel_mix_ctx_init, gfx_lowlevel_reset_dispatch, pl_frame, pl_rect2df,
+        pl_shader_var, pl_var, pl_var_type_PL_VAR_FLOAT, pl_var_type_PL_VAR_SINT,
+        pl_var_type_PL_VAR_UINT,
     },
     gfxinfo::{Vid, VidInfo, VidMixerInfo},
     glob::glob,
@@ -74,7 +75,7 @@ pub struct VidInput {
     pub decoder: decoder::Video,
     pub time_base: Rational,
     pub duration_tbu: Rational,
-    pub last_frame: Arc<WrapFrame>,
+    pub last_frame: Arc<WrapFrame>, //todo add a double buffer here to try and remove the need for the gpu sync in the lowlevel code
     pub last_frame_pts: i64,
     pub last_frame_duration: i64,
     pub last_real_pts: Option<Rational>,
@@ -1751,6 +1752,18 @@ impl VidMixerData {
                     },
                 }
             }
+        }
+        Ok(())
+    }
+
+    pub fn reset_mix_dispatch(&self) -> Result<()> {
+        let mix = self.stream.borrow();
+        if let Some(mix_ctx) = mix.mix_ctx.as_ref() {
+            unsafe {
+                if gfx_lowlevel_reset_dispatch(mix_ctx.0) != 0 {
+                    bail!("Failed to reset mix dispatch for {}", self.info.name);
+                }
+            };
         }
         Ok(())
     }
