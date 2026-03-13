@@ -3,7 +3,6 @@ use std::i32;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GfxInfo {
-    TexInfo(TexInfo),
     VidInfo(VidInfo),
     VidMixerInfo(VidMixerInfo),
 }
@@ -12,7 +11,6 @@ impl GfxInfo {
     pub fn name(&self) -> &String {
         //TODO fix this to be consistent (likely all &str and clone on the caller side)
         match self {
-            GfxInfo::TexInfo(v) => &v.name,
             GfxInfo::VidInfo(v) => &v.name,
             GfxInfo::VidMixerInfo(v) => &v.name,
         }
@@ -28,7 +26,6 @@ macro_rules! gfxinfo_from {
     };
 }
 
-gfxinfo_from! { TexInfo }
 gfxinfo_from! { VidInfo }
 gfxinfo_from! { VidMixerInfo }
 
@@ -36,10 +33,6 @@ gfxinfo_from! { VidMixerInfo }
 impl From<GfxInfo> for Asset {
     fn from(value: GfxInfo) -> Self {
         match value {
-            GfxInfo::TexInfo(v) => Asset::Tex(Tex {
-                name: v.name,
-                globs: vec![],
-            }),
             GfxInfo::VidInfo(v) => Asset::Vid(Vid {
                 name: v.name,
                 path: v.path,
@@ -69,15 +62,8 @@ impl From<GfxInfo> for Asset {
 pub enum Asset {
     #[default]
     Missing,
-    Tex(Tex),
     Vid(Vid),
     VidMixer(VidMixer),
-}
-
-impl From<Tex> for Asset {
-    fn from(value: Tex) -> Self {
-        Self::Tex(value)
-    }
 }
 
 impl From<Vid> for Asset {
@@ -96,7 +82,6 @@ impl Asset {
     pub fn name(&self) -> &str {
         match self {
             Asset::Missing => "missing",
-            Asset::Tex(t) => &t.name,
             Asset::Vid(v) => &v.name,
             Asset::VidMixer(vm) => &vm.name,
         }
@@ -108,12 +93,6 @@ pub struct TexInfo {
     pub name: String,
     pub count: usize,
     pub size: (u32, u32),
-}
-
-#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, Hash)]
-pub struct Tex {
-    pub name: String,
-    pub globs: Vec<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]

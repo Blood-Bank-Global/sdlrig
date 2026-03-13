@@ -14,21 +14,13 @@ extern crate ffmpeg_next as ffmpeg;
 
 use crate::{
     gfxinfo::{Asset, GfxInfo},
-    texruntime::TexData,
     vidruntime::{VidData, VidInput},
 };
 
 #[derive(Debug)]
 pub enum GfxData {
-    TexData(TexData),
     VidData(VidData),
     VidMixerData(VidMixerData),
-}
-
-impl From<TexData> for GfxData {
-    fn from(value: TexData) -> Self {
-        GfxData::TexData(value)
-    }
 }
 
 impl From<VidData> for GfxData {
@@ -40,7 +32,6 @@ impl From<VidData> for GfxData {
 impl GfxData {
     pub fn name(&self) -> String {
         match self {
-            GfxData::TexData(td) => td.info.name.clone(),
             GfxData::VidData(vd) => vd.info.name.clone(),
             GfxData::VidMixerData(vmd) => vmd.info.name.clone(),
         }
@@ -48,7 +39,6 @@ impl GfxData {
 
     pub fn info(&self) -> GfxInfo {
         match self {
-            GfxData::TexData(td) => td.info.clone().into(),
             GfxData::VidData(vd) => vd.info.clone().into(),
             GfxData::VidMixerData(vmd) => vmd.info().into(),
         }
@@ -79,7 +69,6 @@ pub struct GfxRuntime {
 pub fn load(asset: &Asset) -> Result<GfxData> {
     match asset {
         Asset::Missing => Err(anyhow!("asset is missing")),
-        Asset::Tex(t) => TexData::load(t).map(|td| td.into()),
         Asset::Vid(v) => VidData::load(v).map(|vd| vd.into()),
         Asset::VidMixer(m) => Ok(GfxData::VidMixerData(VidMixerData::new(m.clone().into()))),
     }
@@ -337,7 +326,6 @@ impl GfxRuntime {
     fn reset(&self, reset: &Reset) -> Result<()> {
         let mut gfx_data = self.gfx_data.borrow_mut();
         match gfx_data.get_mut(&reset.target) {
-            Some(GfxData::TexData(_tex_data)) => todo!("resetting tex data unimplemented :-o"),
             Some(GfxData::VidData(vid_data)) => vid_data.reset(),
             Some(GfxData::VidMixerData(vid_mixer_data)) => vid_mixer_data.reset(),
             _ => bail!("Unable to find filter named {} to rebuild.", reset.target),

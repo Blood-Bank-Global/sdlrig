@@ -11,8 +11,6 @@ pub mod renderspec;
 #[cfg(target_family = "wasm")]
 pub mod spec_engine;
 #[cfg(not(target_family = "wasm"))]
-pub mod texruntime;
-#[cfg(not(target_family = "wasm"))]
 pub mod vidruntime;
 pub use adjustable::Adjustable;
 #[cfg(not(target_family = "wasm"))]
