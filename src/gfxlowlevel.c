@@ -260,7 +260,7 @@ int gfx_lowlevel_map_frame_ctx(struct gfx_lowlevel_gpu_ctx* ctx,
     fprintf(stderr, "gfx_ll> Failed to map AVFrame to libplacebo frame\n");
     return ret;
   }
-  pl_gpu_finish(ctx->vk->gpu);
+  // pl_gpu_finish(ctx->vk->gpu);
   dst->is_mapped = true;
 
   if (tmp) {
@@ -668,7 +668,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       fprintf(stderr, "gfx_ll> Failed to finish dispatch\n");
       return EINVAL;
     }
-    pl_gpu_finish(ctx->vk->gpu);
+    // pl_gpu_finish(ctx->vk->gpu);
   }
   for (int i = 0; i < num_attribs; i++) {
     free((void*)attribs[i].attr.name);
