@@ -1374,12 +1374,11 @@ impl VidMixerData {
                     }
                     VidMixerInput::Feedback(vid_mixer_data) => {
                         decoded_frames[i] = if vid_mixer_data.info.name == self.info.name {
-                            if !mix.has_been_rendered && mix.pass_buffers.last().is_some() {
+                            if !mix.has_been_rendered && mix.scratch_frame.is_some() {
                                 unsafe {
                                     match gfx_lowlevel_frame_clear(
                                         lowlevel_ctx,
-                                        &mut (*mix.pass_buffers.last_mut().unwrap().0).pl_frame
-                                            as _,
+                                        &mut (*mix.scratch_frame.as_mut().unwrap().0).pl_frame as _,
                                         0.0,
                                         0.0,
                                         0.0,
@@ -1391,17 +1390,15 @@ impl VidMixerData {
                                     mix.has_been_rendered = true;
                                 }
                             }
-                            mix.pass_buffers.last().cloned()
+                            mix.scratch_frame.clone()
                         } else {
                             let mut other_mix = vid_mixer_data.stream.borrow_mut();
-                            if !other_mix.has_been_rendered
-                                && other_mix.pass_buffers.last().is_some()
-                            {
+                            if !other_mix.has_been_rendered && other_mix.scratch_frame.is_some() {
                                 unsafe {
                                     match gfx_lowlevel_frame_clear(
                                         lowlevel_ctx,
-                                        &mut (*other_mix.pass_buffers.last_mut().unwrap().0)
-                                            .pl_frame as _,
+                                        &mut (*other_mix.scratch_frame.as_mut().unwrap().0).pl_frame
+                                            as _,
                                         0.0,
                                         0.0,
                                         0.0,
@@ -1413,7 +1410,7 @@ impl VidMixerData {
                                 }
                                 other_mix.has_been_rendered = true;
                             }
-                            other_mix.pass_buffers.last().cloned()
+                            other_mix.scratch_frame.clone()
                         };
                     }
                 }
@@ -1621,7 +1618,7 @@ impl VidMixerData {
         };
 
         let mut raw_frame = unsafe {
-            vec![&mut (*mix.pass_buffers.last_mut().unwrap().0).pl_frame as *mut pl_frame]
+            vec![&mut (*mix.scratch_frame.as_mut().unwrap().0).pl_frame as *mut pl_frame]
         };
 
         if let Some(target) = target.as_ref() {
