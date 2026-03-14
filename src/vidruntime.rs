@@ -590,6 +590,7 @@ pub struct VidMixerStream {
     pub next_time: Option<Rational>,
     pub last_input_times: Vec<(VidInfo, Rational)>,
     pub last_frame: Option<Arc<WrapFrame>>,
+    pub pass_buffers: Vec<Arc<WrapFrame>>,
     pub last_frame_time: Option<Rational>,
     pub frame_count: i64,
     pub mix_ctx: Option<WrapMixCtx>,
@@ -1153,40 +1154,24 @@ impl VidMixerData {
         let mut stream = self.stream.borrow_mut();
         if stream.mix_ctx.is_none() {
             let mut vars = vec![];
-            let mut addendum = String::new();
+            let mut prelude = String::new();
 
-            if let Some(header) = self.info.header.as_ref() {
-                vars.extend(Self::extract_vars(header, &mut addendum)?);
+            if let Some(shader) = self.info.shader.as_ref() {
+                vars.extend(Self::extract_vars(shader, &mut prelude)?);
             }
-            if let Some(prelude) = self.info.prelude.as_ref() {
-                vars.extend(Self::extract_vars(prelude, &mut addendum)?);
-            }
-            if let Some(body) = self.info.body.as_ref() {
-                vars.extend(Self::extract_vars(body, &mut addendum)?);
-            }
-
-            let prelude_and_addendum = self.info.prelude.as_ref().map_or(addendum.clone(), |p| {
-                String::from_iter([p.clone(), addendum.clone()].into_iter())
-            });
 
             let re = regex::Regex::new(r"(?m)^//!.*\n").unwrap();
 
-            let prelude = Some(
-                CString::new(re.replace_all(&prelude_and_addendum, "").as_bytes())
-                    .unwrap_or_default(),
-            );
+            let prelude =
+                Some(CString::new(re.replace_all(&prelude, "").as_bytes()).unwrap_or_default());
 
-            let body = if let Some(body) = self.info.body.as_ref() {
-                Some(CString::new(re.replace_all(body, "").as_bytes()).unwrap_or_default())
+            let header = if let Some(shader) = self.info.shader.as_ref() {
+                Some(CString::new(re.replace_all(shader, "").as_bytes()).unwrap_or_default())
             } else {
-                None
+                None // honestly this is likely going to be an error but leaving for future use
             };
 
-            let header = if let Some(header) = self.info.header.as_ref() {
-                Some(CString::new(re.replace_all(header, "").as_bytes()).unwrap_or_default())
-            } else {
-                None
-            };
+            let body = Some(CString::new("pass0(color);").unwrap());
 
             //add some internally used variables
             let data = unsafe { libc::malloc(size_of::<libc::c_float>()) };
@@ -1239,6 +1224,23 @@ impl VidMixerData {
                     ) {
                         0 => (),
                         err => bail!("Could not create frame texture {}", err),
+                    }
+                }
+            }
+            if stream.pass_buffers.len() < 2 {
+                for _ in stream.pass_buffers.len()..2 {
+                    unsafe {
+                        let pass_buffer = Arc::new(WrapFrame::new(lowlevel_ctx));
+                        match gfx_lowlevel_frame_create_texture(
+                            lowlevel_ctx,
+                            pass_buffer.0,
+                            self.info.width as i32,
+                            self.info.height as i32,
+                        ) {
+                            0 => (),
+                            err => bail!("Could not create pass buffer texture {}", err),
+                        }
+                        stream.pass_buffers.push(pass_buffer);
                     }
                 }
             }
@@ -1500,6 +1502,8 @@ impl VidMixerData {
                 self.update_values(ctx, &c)?;
             }
 
+            let body = CString::new("pass0(color);")?;
+
             let params = gfx_lowlevel_filter_params {
                 src: pl_rect2df {
                     x0: 0.0,
@@ -1516,7 +1520,7 @@ impl VidMixerData {
                 rotation: 0.0,
                 prelude: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).prelude },
                 header: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).header },
-                body: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).body },
+                body: body.as_ptr(),
                 vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).vars },
                 num_vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).num_vars },
             };

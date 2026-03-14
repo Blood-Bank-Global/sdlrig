@@ -48,9 +48,7 @@ impl From<GfxInfo> for Asset {
             }),
             GfxInfo::VidMixerInfo(v) => Asset::VidMixer(VidMixer {
                 name: v.name,
-                prelude: v.prelude,
-                header: v.header,
-                body: v.body,
+                shader: v.shader,
                 width: v.width,
                 height: v.height,
             }),
@@ -264,9 +262,7 @@ pub struct BufferSrcArgs {
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct VidMixer {
     pub name: String,
-    pub prelude: Option<String>,
-    pub header: Option<String>,
-    pub body: Option<String>,
+    pub shader: Option<String>,
     pub width: u32,
     pub height: u32,
 }
@@ -279,9 +275,7 @@ impl VidMixer {
 
 pub struct VidMixerBuilder {
     name: Option<String>,
-    prelude: Option<String>,
-    header: Option<String>,
-    body: Option<String>,
+    shader: Option<String>,
     width: Option<u32>,
     height: Option<u32>,
 }
@@ -290,9 +284,7 @@ impl VidMixerBuilder {
     pub fn new() -> Self {
         Self {
             name: None,
-            prelude: None,
-            header: None,
-            body: None,
+            shader: None,
             width: None,
             height: None,
         }
@@ -306,27 +298,11 @@ impl VidMixerBuilder {
         self
     }
 
-    pub fn prelude<T>(mut self, prelude: T) -> Self
+    pub fn shader<T>(mut self, shader: T) -> Self
     where
         T: AsRef<str>,
     {
-        self.prelude = Some(prelude.as_ref().into());
-        self
-    }
-
-    pub fn header<T>(mut self, header: T) -> Self
-    where
-        T: AsRef<str>,
-    {
-        self.header = Some(header.as_ref().into());
-        self
-    }
-
-    pub fn body<T>(mut self, body: T) -> Self
-    where
-        T: AsRef<str>,
-    {
-        self.body = Some(body.as_ref().into());
+        self.shader = Some(shader.as_ref().into());
         self
     }
 
@@ -343,12 +319,9 @@ impl VidMixerBuilder {
     pub fn build(self) -> VidMixer {
         VidMixer {
             name: self.name.unwrap(),
-            prelude: self.prelude,
-            header: self.header,
-            body: Some(
-                self.body
-                    .unwrap_or("color = texture(src_tex0, src_coord0);".to_string()),
-            ),
+            shader: Some(self.shader.unwrap_or(
+                "void pass0(out vec4 color) { color = texture(src_tex0, src_coord0); }".into(),
+            )),
             width: self.width.unwrap(),
             height: self.height.unwrap(),
         }
@@ -358,9 +331,7 @@ impl VidMixerBuilder {
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, Hash)]
 pub struct VidMixerInfo {
     pub name: String,
-    pub prelude: Option<String>,
-    pub header: Option<String>,
-    pub body: Option<String>,
+    pub shader: Option<String>,
     pub width: u32,
     pub height: u32,
 }
@@ -369,9 +340,7 @@ impl From<VidMixer> for VidMixerInfo {
     fn from(value: VidMixer) -> Self {
         Self {
             name: value.name,
-            prelude: value.prelude,
-            header: value.header,
-            body: value.body,
+            shader: value.shader,
             width: value.width,
             height: value.height,
         }
