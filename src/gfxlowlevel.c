@@ -381,6 +381,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
                                 struct gfx_lowlevel_filter_params const* params,
                                 struct pl_frame* dst_frame,
                                 struct pl_frame** src_frames, int num_frames,
+                                struct pl_frame** passes, int num_passes,
                                 struct gfx_lowlevel_lut* lut, bool debug) {
   if (!ctx || !src_frames || !dst_frame || !params) {
     fprintf(stderr, "gfx_ll> Invalid context or frame\n");
@@ -395,47 +396,31 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   }
 
   struct pl_shader_desc* descs =
-      malloc(sizeof(struct pl_shader_desc) * num_frames);
+      malloc(sizeof(struct pl_shader_desc) * (num_frames + num_passes));
   if (!descs) {
     fprintf(stderr,
             "gfx_ll> Failed to allocate memory for shader descriptors\n");
     return ENOMEM;
   }
-  memset(descs, 0, sizeof(struct pl_shader_desc) * num_frames);
 
-  for (int i = 0; i < num_frames; i++) {
-    char* name = malloc(32);
-    if (!name) {
-      fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-      free(descs);
-      return ENOMEM;
-    }
-    snprintf(name, 32, "src_tex%d", i);
-    descs[i] = (struct pl_shader_desc){
-        .desc = {.name = name,
-                 .type = PL_DESC_SAMPLED_TEX,
-                 .binding = i,
-                 .access = PL_DESC_ACCESS_READONLY},
-        .binding =
-            {
-                .object = src_frames[i]->planes[0].texture,
-                .address_mode = PL_TEX_ADDRESS_REPEAT,
-                .sample_mode = PL_TEX_SAMPLE_LINEAR,
-            },
-    };
-  }
-  int num_descs = num_frames;
+  memset(descs, 0, sizeof(struct pl_shader_desc) * (num_frames + num_passes));
 
   struct pl_shader_va* attribs =
-      malloc(sizeof(struct pl_shader_va) * (num_frames + 1));
+      malloc(sizeof(struct pl_shader_va) * (num_frames + num_passes + 1));
   if (!attribs) {
     fprintf(stderr,
             "gfx_ll> Failed to allocate memory for shader attributes\n");
     free(descs);
     return ENOMEM;
   }
-  memset(attribs, 0, sizeof(struct pl_shader_va) * (num_frames + 1));
-  for (int i = 0; i < (num_frames + 1); i++) {
+  memset(attribs, 0,
+         sizeof(struct pl_shader_va) * (num_frames + num_passes + 1));
+
+  int num_descs = 0;
+  int num_attribs = 0;
+
+  // add a dummy vertex attrib for the src coords, since the shader expects one
+  {
     char* name = malloc(32);
     if (!name) {
       fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
@@ -443,13 +428,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       free(descs);
       return ENOMEM;
     }
-
-    if (i < num_frames) {
-      snprintf(name, 32, "src_coord%d", i);
-    } else {
-      snprintf(name, 32, "src_coord");
-    }
-
+    snprintf(name, 32, "src_coord");
     float* verts = malloc(sizeof(float) * 4 * 2);
     if (!verts) {
       fprintf(stderr,
@@ -459,16 +438,15 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       free(descs);
       return ENOMEM;
     }
-
-    verts[0] = params->src.x0;
-    verts[1] = params->src.y0;
-    verts[2] = params->src.x1;
-    verts[3] = params->src.y0;
-    verts[4] = params->src.x0;
-    verts[5] = params->src.y1;
-    verts[6] = params->src.x1;
-    verts[7] = params->src.y1;
-    attribs[i] = (struct pl_shader_va){
+    verts[0] = params->dst.x0;
+    verts[1] = params->dst.y0;
+    verts[2] = params->dst.x1;
+    verts[3] = params->dst.y0;
+    verts[4] = params->dst.x0;
+    verts[5] = params->dst.y1;
+    verts[6] = params->dst.x1;
+    verts[7] = params->dst.y1;
+    attribs[num_attribs++] = (struct pl_shader_va){
         .attr =
             {
                 .name = name,
@@ -479,7 +457,143 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     };
   }
 
-  int num_verts = num_frames + 1;
+  // Setup the source frames as inputs
+  for (int i = 0; i < num_frames; i++) {
+    // set up sampler
+    {
+      char* name = malloc(32);
+      if (!name) {
+        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
+        free(descs);
+        free(attribs);
+        return ENOMEM;
+      }
+      snprintf(name, 32, "src_tex%d", i);
+      descs[num_descs] = (struct pl_shader_desc){
+          .desc = {.name = name,
+                   .type = PL_DESC_SAMPLED_TEX,
+                   .binding = num_descs,
+                   .access = PL_DESC_ACCESS_READONLY},
+          .binding =
+              {
+                  .object = src_frames[i]->planes[0].texture,
+                  .address_mode = PL_TEX_ADDRESS_REPEAT,
+                  .sample_mode = PL_TEX_SAMPLE_LINEAR,
+              },
+      };
+      num_descs++;
+    }
+
+    // set up vertex attrib
+    {
+      char* name = malloc(32);
+      if (!name) {
+        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
+        free(attribs);
+        free(descs);
+        return ENOMEM;
+      }
+
+      snprintf(name, 32, "src_coord%d", i);
+
+      float* verts = malloc(sizeof(float) * 4 * 2);
+      if (!verts) {
+        fprintf(stderr,
+                "gfx_ll> Failed to allocate memory for shader vertices\n");
+        free(name);
+        free(attribs);
+        free(descs);
+        return ENOMEM;
+      }
+
+      verts[0] = params->src.x0;
+      verts[1] = params->src.y0;
+      verts[2] = params->src.x1;
+      verts[3] = params->src.y0;
+      verts[4] = params->src.x0;
+      verts[5] = params->src.y1;
+      verts[6] = params->src.x1;
+      verts[7] = params->src.y1;
+      attribs[num_attribs++] = (struct pl_shader_va){
+          .attr =
+              {
+                  .name = name,
+                  .offset = 0,
+                  .fmt = pl_find_vertex_fmt(ctx->vk->gpu, PL_FMT_FLOAT, 2),
+              },
+          .data = {verts, (verts + 2), (verts + 4), (verts + 6)},
+      };
+    }
+  }
+
+  // Set up the previous passes as inputs, if applicable
+  for (int i = 0; i < num_passes; i++) {
+    // set up sampler for pass
+    {
+      char* name = malloc(32);
+      if (!name) {
+        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
+        free(descs);
+        free(attribs);
+        return ENOMEM;
+      }
+      snprintf(name, 32, "pass_tex%d", i);
+      descs[num_descs] = (struct pl_shader_desc){
+          .desc = {.name = name,
+                   .type = PL_DESC_SAMPLED_TEX,
+                   .binding = num_descs,
+                   .access = PL_DESC_ACCESS_READONLY},
+          .binding =
+              {
+                  .object = passes[i]->planes[0].texture,
+                  .address_mode = PL_TEX_ADDRESS_REPEAT,
+                  .sample_mode = PL_TEX_SAMPLE_LINEAR,
+              },
+      };
+      num_descs++;
+    }
+
+    // set up vertex attrib for pass
+    {
+      char* name = malloc(32);
+      if (!name) {
+        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
+        free(attribs);
+        free(descs);
+        return ENOMEM;
+      }
+
+      snprintf(name, 32, "pass_coord%d", i);
+
+      float* verts = malloc(sizeof(float) * 4 * 2);
+      if (!verts) {
+        fprintf(stderr,
+                "gfx_ll> Failed to allocate memory for shader vertices\n");
+        free(name);
+        free(attribs);
+        free(descs);
+        return ENOMEM;
+      }
+
+      verts[0] = params->dst.x0;
+      verts[1] = params->dst.y0;
+      verts[2] = params->dst.x1;
+      verts[3] = params->dst.y0;
+      verts[4] = params->dst.x0;
+      verts[5] = params->dst.y1;
+      verts[6] = params->dst.x1;
+      verts[7] = params->dst.y1;
+      attribs[num_attribs++] = (struct pl_shader_va){
+          .attr =
+              {
+                  .name = name,
+                  .offset = 0,
+                  .fmt = pl_find_vertex_fmt(ctx->vk->gpu, PL_FMT_FLOAT, 2),
+              },
+          .data = {verts, (verts + 2), (verts + 4), (verts + 6)},
+      };
+    }
+  }
 
   struct pl_custom_shader sh_params = {
       .description = "Return src tex",
@@ -493,7 +607,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       .variables = params->vars,
       .num_variables = params->num_vars,
       .vertex_attribs = attribs,
-      .num_vertex_attribs = num_verts,
+      .num_vertex_attribs = num_attribs,
       .constants = NULL,
       .num_constants = 0,
       .compute = false,
@@ -556,7 +670,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     }
     pl_gpu_finish(ctx->vk->gpu);
   }
-  for (int i = 0; i < num_verts; i++) {
+  for (int i = 0; i < num_attribs; i++) {
     free((void*)attribs[i].attr.name);
     free((void*)attribs[i].data[0]);  // free the verts allocation
   }
@@ -727,5 +841,28 @@ int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_mix_ctx* mix_ctx) {
     return EINVAL;
   }
   pl_dispatch_reset_frame(mix_ctx->dispatch);
+  return 0;
+}
+
+int gfx_lowlevel_frame_copy(struct gfx_lowlevel_gpu_ctx* ctx,
+                            struct pl_frame* dst_frame,
+                            struct pl_frame* src_frame) {
+  if (!ctx || !dst_frame || !src_frame) {
+    fprintf(stderr, "gfx_ll> Invalid context or frame\n");
+    return EINVAL;
+  }
+
+  // For single-plane frames
+  if (src_frame->num_planes == 1 && dst_frame->num_planes == 1) {
+    pl_tex_blit(ctx->vk->gpu, &(struct pl_tex_blit_params){
+                                  .src = src_frame->planes[0].texture,
+                                  .dst = dst_frame->planes[0].texture,
+                              });
+    pl_gpu_finish(ctx->vk->gpu);
+    return 0;
+  } else {
+    return EINVAL;  // Multi-plane frame copying not implemented
+  }
+
   return 0;
 }

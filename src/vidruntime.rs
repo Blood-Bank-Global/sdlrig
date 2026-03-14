@@ -1,12 +1,12 @@
 use crate::{
     gfx_lowlevel::bindings::{
-        gfx_lowlevel_filter_params, gfx_lowlevel_frame_clear, gfx_lowlevel_frame_create_texture,
-        gfx_lowlevel_frame_ctx, gfx_lowlevel_frame_ctx_destroy, gfx_lowlevel_frame_ctx_init,
-        gfx_lowlevel_gpu_ctx, gfx_lowlevel_gpu_ctx_render, gfx_lowlevel_lut,
-        gfx_lowlevel_map_frame_ctx, gfx_lowlevel_mix_ctx, gfx_lowlevel_mix_ctx_destroy,
-        gfx_lowlevel_mix_ctx_init, gfx_lowlevel_reset_dispatch, pl_frame, pl_rect2df,
-        pl_shader_var, pl_var, pl_var_type_PL_VAR_FLOAT, pl_var_type_PL_VAR_SINT,
-        pl_var_type_PL_VAR_UINT,
+        gfx_lowlevel_filter_params, gfx_lowlevel_frame_clear, gfx_lowlevel_frame_copy,
+        gfx_lowlevel_frame_create_texture, gfx_lowlevel_frame_ctx, gfx_lowlevel_frame_ctx_destroy,
+        gfx_lowlevel_frame_ctx_init, gfx_lowlevel_gpu_ctx, gfx_lowlevel_gpu_ctx_render,
+        gfx_lowlevel_lut, gfx_lowlevel_map_frame_ctx, gfx_lowlevel_mix_ctx,
+        gfx_lowlevel_mix_ctx_destroy, gfx_lowlevel_mix_ctx_init, gfx_lowlevel_reset_dispatch,
+        pl_frame, pl_rect2df, pl_shader_var, pl_var, pl_var_type_PL_VAR_FLOAT,
+        pl_var_type_PL_VAR_SINT, pl_var_type_PL_VAR_UINT,
     },
     gfxinfo::{Vid, VidInfo, VidMixerInfo},
     glob::glob,
@@ -589,8 +589,9 @@ impl Debug for VidMixerData {
 pub struct VidMixerStream {
     pub next_time: Option<Rational>,
     pub last_input_times: Vec<(VidInfo, Rational)>,
-    pub last_frame: Option<Arc<WrapFrame>>,
     pub pass_buffers: Vec<Arc<WrapFrame>>,
+    pub pass_count: usize,
+    pub scratch_frame: Option<Arc<WrapFrame>>,
     pub last_frame_time: Option<Rational>,
     pub frame_count: i64,
     pub mix_ctx: Option<WrapMixCtx>,
@@ -1171,6 +1172,20 @@ impl VidMixerData {
                 None // honestly this is likely going to be an error but leaving for future use
             };
 
+            let re_comments = regex::Regex::new(r"(?m)//.*\n").unwrap();
+            let re_c_comments = regex::Regex::new(r"(?s)/\*.*?\*/").unwrap();
+            let re_pass = regex::Regex::new(r"(?m)(^|\W)pass\d+(\W|$)").unwrap();
+            stream.pass_count = if let Some(shader) = self.info.shader.as_ref() {
+                re_pass
+                    .find_iter(
+                        re_comments
+                            .replace_all(&re_c_comments.replace_all(shader, "").as_ref(), "")
+                            .as_ref(),
+                    )
+                    .count()
+            } else {
+                0
+            };
             let body = Some(CString::new("pass0(color);").unwrap());
 
             //add some internally used variables
@@ -1211,38 +1226,44 @@ impl VidMixerData {
             }
             stream.mix_ctx.replace(WrapMixCtx(mix_ctx));
             stream.last_frame_time.replace(Rational::new(0, 1));
-            if stream.last_frame.is_none() {
+
+            stream.pass_buffers.clear();
+            for _ in 0..stream.pass_count {
                 unsafe {
-                    stream
-                        .last_frame
-                        .replace(Arc::new(WrapFrame::new(lowlevel_ctx)));
+                    let pass_buffer = Arc::new(WrapFrame::new(lowlevel_ctx));
                     match gfx_lowlevel_frame_create_texture(
                         lowlevel_ctx,
-                        stream.last_frame.as_mut().unwrap().0,
+                        pass_buffer.0,
                         self.info.width as i32,
                         self.info.height as i32,
                     ) {
                         0 => (),
-                        err => bail!("Could not create frame texture {}", err),
+                        err => bail!("Could not create pass buffer texture {}", err),
                     }
+                    stream.pass_buffers.push(pass_buffer);
                 }
             }
-            if stream.pass_buffers.len() < 2 {
-                for _ in stream.pass_buffers.len()..2 {
-                    unsafe {
-                        let pass_buffer = Arc::new(WrapFrame::new(lowlevel_ctx));
-                        match gfx_lowlevel_frame_create_texture(
-                            lowlevel_ctx,
-                            pass_buffer.0,
-                            self.info.width as i32,
-                            self.info.height as i32,
-                        ) {
-                            0 => (),
-                            err => bail!("Could not create pass buffer texture {}", err),
-                        }
-                        stream.pass_buffers.push(pass_buffer);
-                    }
+
+            stream.scratch_frame = Some(Arc::new(WrapFrame::new(lowlevel_ctx)));
+            unsafe {
+                match gfx_lowlevel_frame_create_texture(
+                    lowlevel_ctx,
+                    stream.scratch_frame.as_ref().unwrap().0,
+                    self.info.width as i32,
+                    self.info.height as i32,
+                ) {
+                    0 => (),
+                    err => bail!("Could not create blank frame texture {}", err),
                 }
+
+                gfx_lowlevel_frame_clear(
+                    lowlevel_ctx,
+                    &mut (*stream.scratch_frame.as_ref().unwrap().0).pl_frame as _,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                );
             }
         }
         Ok(())
@@ -1353,11 +1374,12 @@ impl VidMixerData {
                     }
                     VidMixerInput::Feedback(vid_mixer_data) => {
                         decoded_frames[i] = if vid_mixer_data.info.name == self.info.name {
-                            if !mix.has_been_rendered && mix.last_frame.is_some() {
+                            if !mix.has_been_rendered && mix.pass_buffers.last().is_some() {
                                 unsafe {
                                     match gfx_lowlevel_frame_clear(
                                         lowlevel_ctx,
-                                        &mut (*mix.last_frame.as_mut().unwrap().0).pl_frame as _,
+                                        &mut (*mix.pass_buffers.last_mut().unwrap().0).pl_frame
+                                            as _,
                                         0.0,
                                         0.0,
                                         0.0,
@@ -1369,15 +1391,17 @@ impl VidMixerData {
                                     mix.has_been_rendered = true;
                                 }
                             }
-                            mix.last_frame.clone()
+                            mix.pass_buffers.last().cloned()
                         } else {
                             let mut other_mix = vid_mixer_data.stream.borrow_mut();
-                            if !other_mix.has_been_rendered && other_mix.last_frame.is_some() {
+                            if !other_mix.has_been_rendered
+                                && other_mix.pass_buffers.last().is_some()
+                            {
                                 unsafe {
                                     match gfx_lowlevel_frame_clear(
                                         lowlevel_ctx,
-                                        &mut (*other_mix.last_frame.as_ref().unwrap().0).pl_frame
-                                            as _,
+                                        &mut (*other_mix.pass_buffers.last_mut().unwrap().0)
+                                            .pl_frame as _,
                                         0.0,
                                         0.0,
                                         0.0,
@@ -1389,7 +1413,7 @@ impl VidMixerData {
                                 }
                                 other_mix.has_been_rendered = true;
                             }
-                            other_mix.last_frame.clone()
+                            other_mix.pass_buffers.last().cloned()
                         };
                     }
                 }
@@ -1401,16 +1425,18 @@ impl VidMixerData {
         // got a new frame(s)
         mix.last_frame_time = Some(present_time_secs.clone());
         unsafe {
-            match gfx_lowlevel_frame_clear(
-                lowlevel_ctx,
-                &mut (*mix.last_frame.as_mut().unwrap().0).pl_frame as _,
-                0.0,
-                0.0,
-                0.0,
-                1.0,
-            ) {
-                0 => (),
-                err => bail!("Could not clear frame {}", err),
+            for i in 0..mix.pass_buffers.len() {
+                match gfx_lowlevel_frame_clear(
+                    lowlevel_ctx,
+                    &mut (*mix.pass_buffers[i].0).pl_frame as _,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ) {
+                    0 => (),
+                    err => bail!("Could not clear frame {}", err),
+                }
             }
         }
 
@@ -1423,6 +1449,18 @@ impl VidMixerData {
             };
 
             let num_frames = raw_frames.len() as i32;
+
+            // let mut previous_passes = unsafe {
+            //     (0..mix.pass_buffers.len())
+            //         .map(|_| &mut (*mix.blank_frame.as_mut().unwrap().0).pl_frame as *mut _)
+            //         .collect::<Vec<_>>()
+            // };
+
+            let mut previous_passes = unsafe {
+                (0..mix.pass_buffers.len())
+                    .map(|i| &mut (*mix.pass_buffers[i].0).pl_frame as *mut _)
+                    .collect::<Vec<_>>()
+            };
 
             // update how many frames we have seen
             mix.frame_count += 1;
@@ -1502,41 +1540,55 @@ impl VidMixerData {
                 self.update_values(ctx, &c)?;
             }
 
-            let body = CString::new("pass0(color);")?;
+            for i in 0..mix.pass_count {
+                let body = CString::new(format!("pass{}(color);", i))?;
 
-            let params = gfx_lowlevel_filter_params {
-                src: pl_rect2df {
-                    x0: 0.0,
-                    y0: 0.0,
-                    x1: 1.0,
-                    y1: 1.0,
-                },
-                dst: pl_rect2df {
-                    x0: 0.0,
-                    y0: 0.0,
-                    x1: 1.0,
-                    y1: 1.0,
-                },
-                rotation: 0.0,
-                prelude: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).prelude },
-                header: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).header },
-                body: body.as_ptr(),
-                vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).vars },
-                num_vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).num_vars },
-            };
-            unsafe {
-                match gfx_lowlevel_gpu_ctx_render(
-                    lowlevel_ctx,
-                    mix.mix_ctx.as_ref().unwrap().0,
-                    &params as _,
-                    &mut (*mix.last_frame.as_mut().unwrap().0).pl_frame as _,
-                    raw_frames.as_mut_ptr(),
-                    num_frames,
-                    lut_ptr,
-                    shader_debug,
-                ) {
-                    0 => (),
-                    err => bail!("Could not render frame {}", err),
+                let params = gfx_lowlevel_filter_params {
+                    src: pl_rect2df {
+                        x0: 0.0,
+                        y0: 0.0,
+                        x1: 1.0,
+                        y1: 1.0,
+                    },
+                    dst: pl_rect2df {
+                        x0: 0.0,
+                        y0: 0.0,
+                        x1: 1.0,
+                        y1: 1.0,
+                    },
+                    rotation: 0.0,
+                    prelude: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).prelude },
+                    header: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).header },
+                    body: body.as_ptr(),
+                    vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).vars },
+                    num_vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).num_vars },
+                };
+                unsafe {
+                    match gfx_lowlevel_gpu_ctx_render(
+                        lowlevel_ctx,
+                        mix.mix_ctx.as_ref().unwrap().0,
+                        &params as _,
+                        &mut (*mix.scratch_frame.as_ref().unwrap().0).pl_frame as _, //dst frame
+                        raw_frames.as_mut_ptr(),
+                        num_frames,
+                        previous_passes.as_mut_ptr() as _,
+                        previous_passes.len() as i32,
+                        lut_ptr,
+                        shader_debug,
+                    ) {
+                        0 => (),
+                        err => bail!("Could not render frame {}", err),
+                    }
+
+                    // copy the scratch frame to the pass buffer for feedback and potential display
+                    match gfx_lowlevel_frame_copy(
+                        lowlevel_ctx,
+                        &mut (*mix.pass_buffers[i].0).pl_frame as _,
+                        &mut (*mix.scratch_frame.as_ref().unwrap().0).pl_frame as _,
+                    ) {
+                        0 => (),
+                        err => bail!("Could not copy frame {}", err),
+                    }
                 }
             }
         }
@@ -1568,8 +1620,9 @@ impl VidMixerData {
             num_vars: 0,
         };
 
-        let mut raw_frame =
-            unsafe { vec![&mut (*mix.last_frame.as_mut().unwrap().0).pl_frame as *mut pl_frame] };
+        let mut raw_frame = unsafe {
+            vec![&mut (*mix.pass_buffers.last_mut().unwrap().0).pl_frame as *mut pl_frame]
+        };
 
         if let Some(target) = target.as_ref() {
             if let Some(src) = target.src {
@@ -1603,7 +1656,9 @@ impl VidMixerData {
                 &params as _,
                 &mut (*lowlevel_ctx).window_frame as _,
                 raw_frame.as_mut_ptr(),
-                1,
+                raw_frame.len() as i32,
+                std::ptr::null_mut(),
+                0,
                 std::ptr::null_mut(),
                 false,
             ) {

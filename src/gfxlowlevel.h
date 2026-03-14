@@ -85,6 +85,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
                                 struct gfx_lowlevel_filter_params const* params,
                                 struct pl_frame* dst_frame,
                                 struct pl_frame** src_frames, int num_frames,
+                                struct pl_frame** passes, int num_passes,
                                 struct gfx_lowlevel_lut* lut, bool debug);
 
 int gfx_lowlevel_gpu_ctx_finish_frame(struct gfx_lowlevel_gpu_ctx* ctx);
@@ -98,6 +99,11 @@ void gfx_lowlevel_mix_ctx_destroy(struct gfx_lowlevel_mix_ctx** ctx);
 int gfx_lowlevel_frame_create_texture(struct gfx_lowlevel_gpu_ctx* ctx,
                                       struct gfx_lowlevel_frame_ctx* frame,
                                       int width, int height);
+
+int gfx_lowlevel_frame_copy(struct gfx_lowlevel_gpu_ctx* ctx,
+                            struct pl_frame* dst_frame,
+                            struct pl_frame* src_frame);
+
 struct gfx_lowlevel_lut* gfx_lowlevel_init_lut(struct gfx_lowlevel_gpu_ctx* ctx,
                                                const char* lut_filename);
 int gfx_lowlevel_destroy_lut(struct gfx_lowlevel_lut** lut);
