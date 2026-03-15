@@ -31,6 +31,7 @@ struct gfx_lowlevel_gpu_ctx {
   struct pl_frame window_frame;
   pl_renderer renderer;
   pl_log log;
+  pl_dispatch dispatch;  // Shared dispatch for shader caching
   bool started;
 };
 
@@ -52,7 +53,6 @@ struct gfx_lowlevel_mix_ctx {
   char* body;
   struct pl_shader_var* vars;
   int num_vars;
-  pl_dispatch dispatch;
 };
 
 struct gfx_lowlevel_lut {
@@ -81,7 +81,7 @@ int gfx_lowlevel_frame_clear(struct gfx_lowlevel_gpu_ctx* ctx,
                              float b, float a);
 
 int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
-                                struct gfx_lowlevel_mix_ctx* mix_ctx,
+                                // struct gfx_lowlevel_mix_ctx* mix_ctx,
                                 struct gfx_lowlevel_filter_params const* params,
                                 struct pl_frame* dst_frame,
                                 struct pl_frame** src_frames, int num_frames,
@@ -107,5 +107,5 @@ int gfx_lowlevel_frame_copy(struct gfx_lowlevel_gpu_ctx* ctx,
 struct gfx_lowlevel_lut* gfx_lowlevel_init_lut(struct gfx_lowlevel_gpu_ctx* ctx,
                                                const char* lut_filename);
 int gfx_lowlevel_destroy_lut(struct gfx_lowlevel_lut** lut);
-int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_mix_ctx* mix_ctx);
+int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_gpu_ctx* ctx);
 #endif  // GFXLOWLEVEL_H

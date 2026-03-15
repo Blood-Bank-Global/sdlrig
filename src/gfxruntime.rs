@@ -313,11 +313,11 @@ impl GfxRuntime {
         }
     }
 
-    pub fn reset_mix_dispatches(&self) -> Result<()> {
+    pub fn reset_mix_dispatches(&self, lowlevel_ctx: *mut gfx_lowlevel_gpu_ctx) -> Result<()> {
         let gfx_data = self.gfx_data.borrow();
         for data in gfx_data.values() {
             if let GfxData::VidMixerData(vid_mixer_data) = data {
-                vid_mixer_data.reset_mix_dispatch()?;
+                vid_mixer_data.reset_mix_dispatch(lowlevel_ctx)?;
             }
         }
         Ok(())

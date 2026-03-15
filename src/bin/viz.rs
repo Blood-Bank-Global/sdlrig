@@ -341,7 +341,7 @@ pub fn main() -> anyhow::Result<()> {
                     continue 'running;
                 }
 
-                gfx_runtime.reset_mix_dispatches()?;
+                gfx_runtime.reset_mix_dispatches(lowlevel_ctx)?;
             }
 
             for spec in specs.drain(..) {

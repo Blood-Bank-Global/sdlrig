@@ -1563,7 +1563,7 @@ impl VidMixerData {
                 unsafe {
                     match gfx_lowlevel_gpu_ctx_render(
                         lowlevel_ctx,
-                        mix.mix_ctx.as_ref().unwrap().0,
+                        //mix.mix_ctx.as_ref().unwrap().0,
                         &params as _,
                         &mut (*mix.scratch_frame.as_ref().unwrap().0).pl_frame as _, //dst frame
                         raw_frames.as_mut_ptr(),
@@ -1649,7 +1649,7 @@ impl VidMixerData {
         unsafe {
             match gfx_lowlevel_gpu_ctx_render(
                 lowlevel_ctx,
-                mix.mix_ctx.as_ref().unwrap().0,
+                // mix.mix_ctx.as_ref().unwrap().0,
                 &params as _,
                 &mut (*lowlevel_ctx).window_frame as _,
                 raw_frame.as_mut_ptr(),
@@ -1812,11 +1812,11 @@ impl VidMixerData {
         Ok(())
     }
 
-    pub fn reset_mix_dispatch(&self) -> Result<()> {
+    pub fn reset_mix_dispatch(&self, lowlevel_ctx: *mut gfx_lowlevel_gpu_ctx) -> Result<()> {
         let mix = self.stream.borrow();
-        if let Some(mix_ctx) = mix.mix_ctx.as_ref() {
+        if mix.mix_ctx.is_some() {
             unsafe {
-                if gfx_lowlevel_reset_dispatch(mix_ctx.0) != 0 {
+                if gfx_lowlevel_reset_dispatch(lowlevel_ctx) != 0 {
                     bail!("Failed to reset mix dispatch for {}", self.info.name);
                 }
             };

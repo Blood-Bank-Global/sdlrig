@@ -23,6 +23,9 @@ void gfx_lowlevel_gpu_ctx_destroy(struct gfx_lowlevel_gpu_ctx** ctx) {
   if (ctx == NULL || *ctx == NULL) {
     return;
   }
+  if ((*ctx)->dispatch != NULL) {
+    pl_dispatch_destroy(&((*ctx)->dispatch));
+  }
   if ((*ctx)->renderer != NULL) {
     pl_renderer_destroy(&((*ctx)->renderer));
   }
@@ -137,6 +140,14 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
   ctx->renderer = pl_renderer_create(ctx->log, ctx->vk->gpu);
   if (ctx->renderer == NULL) {
     fprintf(stderr, "gfx_ll> Failed to create libplacebo renderer\n");
+    gfx_lowlevel_gpu_ctx_destroy(&ctx);
+    return NULL;
+  }
+
+  // Create a shared dispatch for shader caching
+  ctx->dispatch = pl_dispatch_create(ctx->log, ctx->vk->gpu);
+  if (ctx->dispatch == NULL) {
+    fprintf(stderr, "gfx_ll> Failed to create libplacebo dispatch\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
   }
@@ -377,7 +388,7 @@ int gfx_lowlevel_frame_clear(struct gfx_lowlevel_gpu_ctx* ctx,
 }
 
 int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
-                                struct gfx_lowlevel_mix_ctx* mix_ctx,
+                                // struct gfx_lowlevel_mix_ctx* mix_ctx,
                                 struct gfx_lowlevel_filter_params const* params,
                                 struct pl_frame* dst_frame,
                                 struct pl_frame** src_frames, int num_frames,
@@ -389,7 +400,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   }
 
   // Render the image and run shaders
-  pl_shader sh = pl_dispatch_begin(mix_ctx->dispatch);
+  pl_shader sh = pl_dispatch_begin(ctx->dispatch);
   if (!sh) {
     fprintf(stderr, "gfx_ll> Failed to begin dispatch\n");
     return EINVAL;
@@ -649,7 +660,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
 
   } else {
     if (!pl_dispatch_finish(
-            mix_ctx->dispatch,
+            ctx->dispatch,
             &(struct pl_dispatch_params){
                 .shader = &sh,
                 .target = dst_frame->planes[0].texture,
@@ -736,12 +747,6 @@ struct gfx_lowlevel_mix_ctx* gfx_lowlevel_mix_ctx_init(
   }
   mix_ctx->vars = var_copy;
   mix_ctx->num_vars = num_vars;
-  mix_ctx->dispatch = pl_dispatch_create(ctx->log, ctx->vk->gpu);
-  if (!mix_ctx->dispatch) {
-    fprintf(stderr, "gfx_ll> Failed to create dispatch\n");
-    gfx_lowlevel_mix_ctx_destroy(&mix_ctx);
-    return NULL;
-  }
 
   return mix_ctx;
 }
@@ -756,9 +761,6 @@ void gfx_lowlevel_mix_ctx_destroy(struct gfx_lowlevel_mix_ctx** mix_ctx) {
       free((void*)(*mix_ctx)->vars[i].data);
     }
     free((void*)(*mix_ctx)->vars);
-    if ((*mix_ctx)->dispatch) {
-      pl_dispatch_destroy(&(*mix_ctx)->dispatch);
-    }
 
     free((void*)(*mix_ctx));
     *mix_ctx = NULL;
@@ -835,12 +837,12 @@ int gfx_lowlevel_destroy_lut(struct gfx_lowlevel_lut** lut) {
   return 0;
 }
 
-int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_mix_ctx* mix_ctx) {
-  if (!mix_ctx || !mix_ctx->dispatch) {
-    fprintf(stderr, "gfx_ll> Invalid mix context\n");
+int gfx_lowlevel_reset_dispatch(struct gfx_lowlevel_gpu_ctx* ctx) {
+  if (!ctx || !ctx->dispatch) {
+    fprintf(stderr, "gfx_ll> Invalid GPU context\n");
     return EINVAL;
   }
-  pl_dispatch_reset_frame(mix_ctx->dispatch);
+  pl_dispatch_reset_frame(ctx->dispatch);
   return 0;
 }
 
