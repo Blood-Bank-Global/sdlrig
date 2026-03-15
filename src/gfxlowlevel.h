@@ -33,6 +33,16 @@ struct gfx_lowlevel_gpu_ctx {
   pl_log log;
   pl_dispatch dispatch;  // Shared dispatch for shader caching
   bool started;
+  
+  // Resource pool for render operations to avoid per-frame allocations
+  struct {
+    struct pl_shader_desc* descs;
+    struct pl_shader_va* attribs;
+    char** names;  // Array of name strings
+    float** vert_buffers;  // Array of vertex buffers
+    int max_resources;  // Maximum number of frames + passes
+    int max_names;  // Maximum number of name strings
+  } resource_pool;
 };
 
 struct gfx_lowlevel_filter_params {

@@ -23,6 +23,23 @@ void gfx_lowlevel_gpu_ctx_destroy(struct gfx_lowlevel_gpu_ctx** ctx) {
   if (ctx == NULL || *ctx == NULL) {
     return;
   }
+
+  // Clean up resource pool
+  if ((*ctx)->resource_pool.names) {
+    for (int i = 0; i < (*ctx)->resource_pool.max_names; i++) {
+      free((*ctx)->resource_pool.names[i]);
+    }
+    free((*ctx)->resource_pool.names);
+  }
+  if ((*ctx)->resource_pool.vert_buffers) {
+    for (int i = 0; i < (*ctx)->resource_pool.max_names; i++) {
+      free((*ctx)->resource_pool.vert_buffers[i]);
+    }
+    free((*ctx)->resource_pool.vert_buffers);
+  }
+  free((*ctx)->resource_pool.descs);
+  free((*ctx)->resource_pool.attribs);
+
   if ((*ctx)->dispatch != NULL) {
     pl_dispatch_destroy(&((*ctx)->dispatch));
   }
@@ -150,6 +167,38 @@ struct gfx_lowlevel_gpu_ctx* gfx_lowlevel_gpu_ctx_init(
     fprintf(stderr, "gfx_ll> Failed to create libplacebo dispatch\n");
     gfx_lowlevel_gpu_ctx_destroy(&ctx);
     return NULL;
+  }
+
+  // Initialize resource pool to avoid per-frame allocations
+  // Allocate for up to 16 frames + 16 passes (generous default)
+  ctx->resource_pool.max_resources = 128;
+  ctx->resource_pool.max_names = 256;  // (frames + passes + 1) * 2 + some extra
+
+  ctx->resource_pool.descs =
+      calloc(ctx->resource_pool.max_resources, sizeof(struct pl_shader_desc));
+  ctx->resource_pool.attribs =
+      calloc(ctx->resource_pool.max_resources + 1, sizeof(struct pl_shader_va));
+  ctx->resource_pool.names =
+      calloc(ctx->resource_pool.max_names, sizeof(char*));
+  ctx->resource_pool.vert_buffers =
+      calloc(ctx->resource_pool.max_names, sizeof(float*));
+
+  if (!ctx->resource_pool.descs || !ctx->resource_pool.attribs ||
+      !ctx->resource_pool.names || !ctx->resource_pool.vert_buffers) {
+    fprintf(stderr, "gfx_ll> Failed to allocate resource pool\n");
+    gfx_lowlevel_gpu_ctx_destroy(&ctx);
+    return NULL;
+  }
+
+  // Pre-allocate name strings and vertex buffers
+  for (int i = 0; i < ctx->resource_pool.max_names; i++) {
+    ctx->resource_pool.names[i] = malloc(32);
+    ctx->resource_pool.vert_buffers[i] = malloc(sizeof(float) * 8);
+    if (!ctx->resource_pool.names[i] || !ctx->resource_pool.vert_buffers[i]) {
+      fprintf(stderr, "gfx_ll> Failed to allocate resource pool buffers\n");
+      gfx_lowlevel_gpu_ctx_destroy(&ctx);
+      return NULL;
+    }
   }
 
   return ctx;
@@ -406,49 +455,37 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     return EINVAL;
   }
 
-  struct pl_shader_desc* descs =
-      malloc(sizeof(struct pl_shader_desc) * (num_frames + num_passes));
-  if (!descs) {
+  // Use pre-allocated resources from pool instead of malloc
+  int total_resources = num_frames + num_passes;
+  if (total_resources > ctx->resource_pool.max_resources) {
     fprintf(stderr,
-            "gfx_ll> Failed to allocate memory for shader descriptors\n");
+            "gfx_ll> Too many frames+passes (%d) exceeds pool size (%d)\n",
+            total_resources, ctx->resource_pool.max_resources);
     return ENOMEM;
   }
 
-  memset(descs, 0, sizeof(struct pl_shader_desc) * (num_frames + num_passes));
+  struct pl_shader_desc* descs = ctx->resource_pool.descs;
+  struct pl_shader_va* attribs = ctx->resource_pool.attribs;
 
-  struct pl_shader_va* attribs =
-      malloc(sizeof(struct pl_shader_va) * (num_frames + num_passes + 1));
-  if (!attribs) {
-    fprintf(stderr,
-            "gfx_ll> Failed to allocate memory for shader attributes\n");
-    free(descs);
-    return ENOMEM;
-  }
-  memset(attribs, 0,
-         sizeof(struct pl_shader_va) * (num_frames + num_passes + 1));
+  // Clear the arrays (they're reused across frames)
+  memset(descs, 0, sizeof(struct pl_shader_desc) * total_resources);
+  memset(attribs, 0, sizeof(struct pl_shader_va) * (total_resources + 1));
 
   int num_descs = 0;
   int num_attribs = 0;
+  int name_idx = 0;  // Track which pre-allocated name/buffer we're using
 
   // add a dummy vertex attrib for the src coords, since the shader expects one
   {
-    char* name = malloc(32);
-    if (!name) {
-      fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-      free(attribs);
-      free(descs);
+    if (name_idx >= ctx->resource_pool.max_names) {
+      fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
       return ENOMEM;
     }
+    char* name = ctx->resource_pool.names[name_idx];
+    float* verts = ctx->resource_pool.vert_buffers[name_idx];
+    name_idx++;
+
     snprintf(name, 32, "src_coord");
-    float* verts = malloc(sizeof(float) * 4 * 2);
-    if (!verts) {
-      fprintf(stderr,
-              "gfx_ll> Failed to allocate memory for shader vertices\n");
-      free(name);
-      free(attribs);
-      free(descs);
-      return ENOMEM;
-    }
     verts[0] = params->dst.x0;
     verts[1] = params->dst.y0;
     verts[2] = params->dst.x1;
@@ -472,13 +509,11 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   for (int i = 0; i < num_frames; i++) {
     // set up sampler
     {
-      char* name = malloc(32);
-      if (!name) {
-        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-        free(descs);
-        free(attribs);
+      if (name_idx >= ctx->resource_pool.max_names) {
+        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
         return ENOMEM;
       }
+      char* name = ctx->resource_pool.names[name_idx++];
       snprintf(name, 32, "src_tex%d", i);
       descs[num_descs] = (struct pl_shader_desc){
           .desc = {.name = name,
@@ -497,25 +532,15 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
 
     // set up vertex attrib
     {
-      char* name = malloc(32);
-      if (!name) {
-        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-        free(attribs);
-        free(descs);
+      if (name_idx >= ctx->resource_pool.max_names) {
+        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
         return ENOMEM;
       }
+      char* name = ctx->resource_pool.names[name_idx];
+      float* verts = ctx->resource_pool.vert_buffers[name_idx];
+      name_idx++;
 
       snprintf(name, 32, "src_coord%d", i);
-
-      float* verts = malloc(sizeof(float) * 4 * 2);
-      if (!verts) {
-        fprintf(stderr,
-                "gfx_ll> Failed to allocate memory for shader vertices\n");
-        free(name);
-        free(attribs);
-        free(descs);
-        return ENOMEM;
-      }
 
       verts[0] = params->src.x0;
       verts[1] = params->src.y0;
@@ -541,13 +566,11 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
   for (int i = 0; i < num_passes; i++) {
     // set up sampler for pass
     {
-      char* name = malloc(32);
-      if (!name) {
-        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-        free(descs);
-        free(attribs);
+      if (name_idx >= ctx->resource_pool.max_names) {
+        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
         return ENOMEM;
       }
+      char* name = ctx->resource_pool.names[name_idx++];
       snprintf(name, 32, "pass_tex%d", i);
       descs[num_descs] = (struct pl_shader_desc){
           .desc = {.name = name,
@@ -566,25 +589,15 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
 
     // set up vertex attrib for pass
     {
-      char* name = malloc(32);
-      if (!name) {
-        fprintf(stderr, "gfx_ll> Failed to allocate memory for shader name\n");
-        free(attribs);
-        free(descs);
+      if (name_idx >= ctx->resource_pool.max_names) {
+        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
         return ENOMEM;
       }
+      char* name = ctx->resource_pool.names[name_idx];
+      float* verts = ctx->resource_pool.vert_buffers[name_idx];
+      name_idx++;
 
       snprintf(name, 32, "pass_coord%d", i);
-
-      float* verts = malloc(sizeof(float) * 4 * 2);
-      if (!verts) {
-        fprintf(stderr,
-                "gfx_ll> Failed to allocate memory for shader vertices\n");
-        free(name);
-        free(attribs);
-        free(descs);
-        return ENOMEM;
-      }
 
       verts[0] = params->dst.x0;
       verts[1] = params->dst.y0;
@@ -626,6 +639,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
 
   if (!pl_shader_custom(sh, &sh_params)) {
     fprintf(stderr, "gfx_ll> Failed to create custom shader\n");
+    // Note: No need to free resources - they're from the pool
     return EINVAL;
   }
 
@@ -637,8 +651,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     const struct pl_shader_res* res = pl_shader_finalize(sh);
     if (!res) {
       fprintf(stderr, "gfx_ll> Failed to finalize shader\n");
-      free(attribs);
-      free(descs);
+      // Note: No need to free resources - they're from the pool
       exit(1);
     } else {
       fprintf(stderr, "Shader finalized successfully\n");
@@ -681,15 +694,9 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     }
     // pl_gpu_finish(ctx->vk->gpu);
   }
-  for (int i = 0; i < num_attribs; i++) {
-    free((void*)attribs[i].attr.name);
-    free((void*)attribs[i].data[0]);  // free the verts allocation
-  }
-  free(attribs);
-  for (int i = 0; i < num_descs; i++) {
-    free((void*)descs[i].desc.name);
-  }
-  free((void*)descs);
+
+  // Resources are from the pool - no need to free them!
+  // They'll be reused on the next frame
 
   return 0;
 }
