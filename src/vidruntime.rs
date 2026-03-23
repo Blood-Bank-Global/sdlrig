@@ -1415,7 +1415,6 @@ impl VidMixerData {
                     }
                 }
             }
-
             break;
         }
 
@@ -1446,12 +1445,6 @@ impl VidMixerData {
             };
 
             let num_frames = raw_frames.len() as i32;
-
-            // let mut previous_passes = unsafe {
-            //     (0..mix.pass_buffers.len())
-            //         .map(|_| &mut (*mix.blank_frame.as_mut().unwrap().0).pl_frame as *mut _)
-            //         .collect::<Vec<_>>()
-            // };
 
             let mut previous_passes = unsafe {
                 (0..mix.pass_buffers.len())

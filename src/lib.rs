@@ -15,3 +15,4 @@ pub mod vidruntime;
 pub use adjustable::Adjustable;
 #[cfg(not(target_family = "wasm"))]
 pub mod gfx_lowlevel;
+pub mod shaderhelper;
