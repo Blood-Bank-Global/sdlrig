@@ -320,7 +320,7 @@ impl VidMixerBuilder {
         VidMixer {
             name: self.name.unwrap(),
             shader: Some(self.shader.unwrap_or(
-                "void pass0(out vec4 color) { color = texture(src_tex0, src_coord0); }".into(),
+                "void pass0(out vec4 color) { color = texture(src_tex0, src_uv0); }".into(),
             )),
             width: self.width.unwrap(),
             height: self.height.unwrap(),

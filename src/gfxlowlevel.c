@@ -485,7 +485,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     float* verts = ctx->resource_pool.vert_buffers[name_idx];
     name_idx++;
 
-    snprintf(name, 32, "src_coord");
+    snprintf(name, 32, "src_uv");
     verts[0] = params->dst.x0;
     verts[1] = params->dst.y0;
     verts[2] = params->dst.x1;
@@ -540,7 +540,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       float* verts = ctx->resource_pool.vert_buffers[name_idx];
       name_idx++;
 
-      snprintf(name, 32, "src_coord%d", i);
+      snprintf(name, 32, "src_uv%d", i);
 
       verts[0] = params->src.x0;
       verts[1] = params->src.y0;
@@ -597,7 +597,7 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       float* verts = ctx->resource_pool.vert_buffers[name_idx];
       name_idx++;
 
-      snprintf(name, 32, "pass_coord%d", i);
+      snprintf(name, 32, "pass_uv%d", i);
 
       verts[0] = params->dst.x0;
       verts[1] = params->dst.y0;

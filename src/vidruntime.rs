@@ -1588,7 +1588,7 @@ impl VidMixerData {
         }
 
         // basic copy params - just sample the mixed frame into the fbo
-        let body = CString::new("color = texture(src_tex0, src_coord0);")?;
+        let body = CString::new("color = texture(src_tex0, src_uv0);")?;
         let mut params = gfx_lowlevel_filter_params {
             src: pl_rect2df {
                 x0: 0.0,
