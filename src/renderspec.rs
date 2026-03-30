@@ -205,6 +205,7 @@ pub enum MixInput {
 pub struct Mix {
     pub name: String,
     pub inputs: Vec<MixInput>,
+    pub seek_target_hint: Option<String>,
     pub target: Option<CopyEx>,
     pub lut: Option<String>,
     pub no_display: bool,
@@ -252,6 +253,14 @@ impl MixBuilder {
         T: AsRef<str>,
     {
         self.obj.inputs.push(MixInput::Mixed(mixed.as_ref().into()));
+        self
+    }
+
+    pub fn seek_target_hint<T>(mut self, seek_target_hint: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        self.obj.seek_target_hint = Some(seek_target_hint.as_ref().into());
         self
     }
 
