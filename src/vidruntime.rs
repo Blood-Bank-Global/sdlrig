@@ -1436,7 +1436,8 @@ impl VidMixerData {
             }
         }
 
-        if !decoded_frames.is_empty() && decoded_frames.iter().all(|f| f.is_some()) {
+        // if true is just a debug hack
+        if decoded_frames.is_empty() || decoded_frames.iter().all(|f| f.is_some()) {
             let mut raw_frames = unsafe {
                 decoded_frames
                     .iter()
