@@ -1555,6 +1555,11 @@ impl VidMixerData {
                     num_vars: unsafe { (*mix.mix_ctx.as_ref().unwrap().0).num_vars },
                 };
                 unsafe {
+                    let one_lut_only = if i == mix.pass_count - 1 {
+                        lut_ptr
+                    } else {
+                        std::ptr::null_mut()
+                    };
                     match gfx_lowlevel_gpu_ctx_render(
                         lowlevel_ctx,
                         //mix.mix_ctx.as_ref().unwrap().0,
@@ -1564,7 +1569,7 @@ impl VidMixerData {
                         num_frames,
                         previous_passes.as_mut_ptr() as _,
                         previous_passes.len() as i32,
-                        lut_ptr,
+                        one_lut_only,
                         shader_debug,
                     ) {
                         0 => (),
@@ -1589,7 +1594,7 @@ impl VidMixerData {
         }
 
         // basic copy params - just sample the mixed frame into the fbo
-        let body = CString::new("color = texture(src_tex0, src_uv0);")?;
+        let body = CString::new("color = texture(src_tex0, src_uv);")?;
         let mut params = gfx_lowlevel_filter_params {
             src: pl_rect2df {
                 x0: 0.0,

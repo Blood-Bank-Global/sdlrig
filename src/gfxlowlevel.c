@@ -486,14 +486,14 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
     name_idx++;
 
     snprintf(name, 32, "src_uv");
-    verts[0] = params->dst.x0;
-    verts[1] = params->dst.y0;
-    verts[2] = params->dst.x1;
-    verts[3] = params->dst.y0;
-    verts[4] = params->dst.x0;
-    verts[5] = params->dst.y1;
-    verts[6] = params->dst.x1;
-    verts[7] = params->dst.y1;
+    verts[0] = params->src.x0;
+    verts[1] = params->src.y0;
+    verts[2] = params->src.x1;
+    verts[3] = params->src.y0;
+    verts[4] = params->src.x0;
+    verts[5] = params->src.y1;
+    verts[6] = params->src.x1;
+    verts[7] = params->src.y1;
     attribs[num_attribs++] = (struct pl_shader_va){
         .attr =
             {
@@ -529,37 +529,6 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
       };
       num_descs++;
     }
-
-    // set up vertex attrib
-    {
-      if (name_idx >= ctx->resource_pool.max_names) {
-        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
-        return ENOMEM;
-      }
-      char* name = ctx->resource_pool.names[name_idx];
-      float* verts = ctx->resource_pool.vert_buffers[name_idx];
-      name_idx++;
-
-      snprintf(name, 32, "src_uv%d", i);
-
-      verts[0] = params->src.x0;
-      verts[1] = params->src.y0;
-      verts[2] = params->src.x1;
-      verts[3] = params->src.y0;
-      verts[4] = params->src.x0;
-      verts[5] = params->src.y1;
-      verts[6] = params->src.x1;
-      verts[7] = params->src.y1;
-      attribs[num_attribs++] = (struct pl_shader_va){
-          .attr =
-              {
-                  .name = name,
-                  .offset = 0,
-                  .fmt = pl_find_vertex_fmt(ctx->vk->gpu, PL_FMT_FLOAT, 2),
-              },
-          .data = {verts, (verts + 2), (verts + 4), (verts + 6)},
-      };
-    }
   }
 
   // Set up the previous passes as inputs, if applicable
@@ -585,37 +554,6 @@ int gfx_lowlevel_gpu_ctx_render(struct gfx_lowlevel_gpu_ctx* ctx,
               },
       };
       num_descs++;
-    }
-
-    // set up vertex attrib for pass
-    {
-      if (name_idx >= ctx->resource_pool.max_names) {
-        fprintf(stderr, "gfx_ll> Exceeded max names in resource pool\n");
-        return ENOMEM;
-      }
-      char* name = ctx->resource_pool.names[name_idx];
-      float* verts = ctx->resource_pool.vert_buffers[name_idx];
-      name_idx++;
-
-      snprintf(name, 32, "pass_uv%d", i);
-
-      verts[0] = params->dst.x0;
-      verts[1] = params->dst.y0;
-      verts[2] = params->dst.x1;
-      verts[3] = params->dst.y0;
-      verts[4] = params->dst.x0;
-      verts[5] = params->dst.y1;
-      verts[6] = params->dst.x1;
-      verts[7] = params->dst.y1;
-      attribs[num_attribs++] = (struct pl_shader_va){
-          .attr =
-              {
-                  .name = name,
-                  .offset = 0,
-                  .fmt = pl_find_vertex_fmt(ctx->vk->gpu, PL_FMT_FLOAT, 2),
-              },
-          .data = {verts, (verts + 2), (verts + 4), (verts + 6)},
-      };
     }
   }
 
