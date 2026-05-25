@@ -1230,7 +1230,8 @@ impl VidMixerData {
             stream.pass_buffers.clear();
             for _ in 0..stream.pass_count {
                 unsafe {
-                    let pass_buffer = Arc::new(WrapFrame::new(lowlevel_ctx));
+                    #[allow(unused_mut)]
+                    let mut pass_buffer = Arc::new(WrapFrame::new(lowlevel_ctx));
                     match gfx_lowlevel_frame_create_texture(
                         lowlevel_ctx,
                         pass_buffer.0,
@@ -1240,6 +1241,16 @@ impl VidMixerData {
                         0 => (),
                         err => bail!("Could not create pass buffer texture {}", err),
                     }
+
+                    gfx_lowlevel_frame_clear(
+                        lowlevel_ctx,
+                        &mut (*pass_buffer.0).pl_frame as _,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                    );
+
                     stream.pass_buffers.push(pass_buffer);
                 }
             }
@@ -1420,21 +1431,6 @@ impl VidMixerData {
 
         // got a new frame(s)
         mix.last_frame_time = Some(present_time_secs.clone());
-        unsafe {
-            for i in 0..mix.pass_buffers.len() {
-                match gfx_lowlevel_frame_clear(
-                    lowlevel_ctx,
-                    &mut (*mix.pass_buffers[i].0).pl_frame as _,
-                    0.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                ) {
-                    0 => (),
-                    err => bail!("Could not clear frame {}", err),
-                }
-            }
-        }
 
         // if true is just a debug hack
         if decoded_frames.is_empty() || decoded_frames.iter().all(|f| f.is_some()) {
